@@ -13,13 +13,13 @@ class Workspace(AppBase):
     logo_url: Mapped[str | None] = mapped_column(String)
     timezone: Mapped[str] = mapped_column(String, default="UTC")
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    elevenlabs_api_key_enc: Mapped[str | None] = mapped_column(String)
 
     # relationships
     members: Mapped[list["WorkspaceMember"]] = relationship(
         back_populates="workspace", cascade="all, delete-orphan"
     )
-    # Placeholder relationships for future phases
-    # agents: Mapped[list["Agent"]] = relationship(back_populates="workspace")
+    agents: Mapped[list["Agent"]] = relationship(back_populates="workspace", cascade="all, delete-orphan")
     # campaigns: Mapped[list["Campaign"]] = relationship(back_populates="workspace")
     # phone_numbers: Mapped[list["PhoneNumber"]] = relationship(back_populates="workspace")
     # integrations: Mapped[list["Integration"]] = relationship(back_populates="workspace")

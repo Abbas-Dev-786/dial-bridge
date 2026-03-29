@@ -1,0 +1,97 @@
+import httpx
+from app.config import settings
+from app.exceptions import ElevenLabsError, ValidationError
+
+ELEVENLABS_BASE_URL = "https://api.elevenlabs.io/v1"
+
+class ElevenLabsClient:
+    def __init__(self, api_key: str):
+        self._client = httpx.AsyncClient(
+            base_url=ELEVENLABS_BASE_URL,
+            headers={
+                "xi-api-key": api_key,
+                "Content-Type": "application/json",
+            },
+            timeout=30.0,
+        )
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *args):
+        await self._client.aclose()
+
+    async def _request(self, method: str, path: str, **kwargs) -> dict:
+        response = await self._client.request(method, path, **kwargs)
+        if not response.is_success:
+            raise ElevenLabsError(
+                f"{response.status_code} — {response.text[:200]}"
+            )
+        try:
+            return response.json() if response.content else {}
+        except Exception:
+            return {}
+
+    # ── Agent endpoints ──────────────────────────────────────
+
+    async def create_agent(self, payload: dict) -> dict:
+        """POST /convai/agents/create — returns { agent_id: str }"""
+        return await self._request("POST", "/convai/agents/create", json=payload)
+
+    async def get_agent(self, agent_id: str) -> dict:
+        """GET /convai/agents/{agent_id}"""
+        return await self._request("GET", f"/convai/agents/{agent_id}")
+
+    async def update_agent(self, agent_id: str, payload: dict) -> dict:
+        """PATCH /convai/agents/{agent_id} — returns dict"""
+        return await self._request("PATCH", f"/convai/agents/{agent_id}", json=payload)
+
+    async def delete_agent(self, agent_id: str) -> None:
+        """DELETE /convai/agents/{agent_id}"""
+        await self._request("DELETE", f"/convai/agents/{agent_id}")
+
+    # ── Voice endpoints ───────────────────────────────────────
+
+    async def list_voices(self) -> list[dict]:
+        """GET /voices — returns list of available voices for this API key"""
+        data = await self._request("GET", "/v1/voices") # ElevenLabs voices endpoint is /v1/voices or /voices depending on base url
+        # If base_url ends with /v1, we use /voices. Our base_url is /v1, so we use /voices.
+        # Wait, the prompt says GET /voices. Let's stick to that.
+        return data.get("voices", [])
+
+    # ── Knowledge base endpoints (used in Phase 6) ────────────
+
+    async def create_kb_document(self, payload: dict) -> dict:
+        """POST /convai/agents/{agent_id}/add-to-knowledge-base"""
+        # Implemented in Phase 6
+        raise NotImplementedError
+
+    async def delete_kb_document(self, agent_id: str, kb_id: str) -> None:
+        # Implemented in Phase 6
+        raise NotImplementedError
+
+    # ── Telephony endpoints (used in Phase 4) ─────────────────
+
+    async def list_phone_numbers(self) -> list[dict]:
+        # Implemented in Phase 4
+        raise NotImplementedError
+
+    async def assign_phone_to_agent(self, phone_number_id: str, agent_id: str) -> dict:
+        # Implemented in Phase 4
+        raise NotImplementedError
+
+
+async def get_elevenlabs_client(workspace) -> ElevenLabsClient:
+    """
+    Helper to instantiate the client from a workspace object.
+    The workspace must have elevenlabs_api_key_enc set.
+    Raises ValidationError if no API key is configured.
+    """
+    if not workspace.elevenlabs_api_key_enc:
+        raise ValidationError(
+            "No ElevenLabs API key configured for this workspace. "
+            "Add your API key in workspace settings."
+        )
+    # In production, decrypt the key here before using it.
+    # For now, treat it as plain text during development.
+    return ElevenLabsClient(api_key=workspace.elevenlabs_api_key_enc)

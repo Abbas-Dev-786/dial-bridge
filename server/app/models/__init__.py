@@ -29,3 +29,4 @@ class AppBase(UUIDMixin, TimestampMixin, Base):
 # Re-export models for Alembic discovery
 from app.models.user import User
 from app.models.workspace import Workspace, WorkspaceMember, Invitation, OAuthAccount
+from app.models.agent import Agent, AgentVoiceConfig, AgentConversationConfig, AgentTool

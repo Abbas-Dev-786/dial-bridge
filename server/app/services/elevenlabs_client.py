@@ -73,12 +73,36 @@ class ElevenLabsClient:
     # ── Telephony endpoints (used in Phase 4) ─────────────────
 
     async def list_phone_numbers(self) -> list[dict]:
-        # Implemented in Phase 4
-        raise NotImplementedError
+        """
+        GET /convai/phone-numbers
+        Returns all phone numbers on the ElevenLabs account for this API key.
+        """
+        data = await self._request("GET", "/convai/phone-numbers")
+        return data.get("phone_numbers", [])
+
+    async def get_phone_number(self, phone_number_id: str) -> dict:
+        """GET /convai/phone-numbers/{phone_number_id}"""
+        return await self._request("GET", f"/convai/phone-numbers/{phone_number_id}")
 
     async def assign_phone_to_agent(self, phone_number_id: str, agent_id: str) -> dict:
-        # Implemented in Phase 4
-        raise NotImplementedError
+        """
+        POST /convai/phone-numbers/{phone_number_id}/assign
+        Assigns the ElevenLabs number to an EL agent.
+        """
+        return await self._request(
+            "POST",
+            f"/convai/phone-numbers/{phone_number_id}/assign",
+            json={"agent_id": agent_id},
+        )
+
+    async def unassign_phone_from_agent(self, phone_number_id: str) -> dict:
+        """
+        POST /convai/phone-numbers/{phone_number_id}/unassign
+        """
+        return await self._request(
+            "POST",
+            f"/convai/phone-numbers/{phone_number_id}/unassign",
+        )
 
 
 async def get_elevenlabs_client(workspace) -> ElevenLabsClient:

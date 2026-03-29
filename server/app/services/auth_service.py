@@ -1,145 +1,101 @@
+from datetime import datetime
+from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from fastapi import HTTPException
-from app.models.user import User
-from app.models.workspace_member import WorkspaceMember
-from app.schemas.auth import (
-    RegisterRequest,
-    LoginRequest,
-    RefreshRequest,
-    TokenResponse,
-)
-from app.utils.security import create_access_token, create_refresh_token, decode_token
-from app.core.security import get_password_hash, verify_password
-from datetime import datetime, timezone
 from jose import JWTError
+
+from app.models.user import User
+from app.schemas.auth import RegisterRequest, LoginRequest, TokenResponse, RefreshRequest
+from app.utils.security import hash_password, verify_password, create_access_token, create_refresh_token, decode_token
+from app.exceptions import ConflictError, NotFoundError, ForbiddenError
 from app.enums import UserStatus
-from uuid import UUID
-
-
-class ConflictError(HTTPException):
-    def __init__(self, detail: str):
-        super().__init__(status_code=409, detail=detail)
-
-
-class NotFoundError(HTTPException):
-    def __init__(self, detail: str):
-        super().__init__(status_code=404, detail=detail)
-
-
-class ForbiddenError(HTTPException):
-    def __init__(self, detail: str = "Insufficient permissions"):
-        super().__init__(status_code=403, detail=detail)
-
 
 async def register(db: AsyncSession, data: RegisterRequest) -> User:
-    # Check email is not already taken
+    # Check if email is already taken
     result = await db.execute(select(User).where(User.email == data.email))
-    existing_user = result.scalar_one_or_none()
-    if existing_user:
+    if result.scalar_one_or_none():
         raise ConflictError("Email already registered")
-
-    # Hash password
-    hashed_password = get_password_hash(data.password)
-
-    # Create User row
+    
     user = User(
         email=data.email,
+        password_hash=hash_password(data.password),
         full_name=data.full_name,
-        password_hash=hashed_password,
+        status=UserStatus.active
     )
     db.add(user)
     await db.flush()
-    await db.refresh(user)
     return user
 
-
 async def login(db: AsyncSession, data: LoginRequest) -> TokenResponse:
-    # Fetch user by email
     result = await db.execute(select(User).where(User.email == data.email))
     user = result.scalar_one_or_none()
+    
     if not user:
-        raise NotFoundError("User not found")
-
-    # Check user status
-    if user.status == "deleted":
-        raise ForbiddenError("User account has been deleted")
-
-    # Verify password
+        raise NotFoundError("User")
+    
+    if user.status == UserStatus.deleted or user.status == UserStatus.suspended:
+        raise ForbiddenError("Account is suspended or deleted")
+    
     if not verify_password(data.password, user.password_hash):
-        raise HTTPException(status_code=401, detail="Incorrect email or password")
-
-    # Update last sign in
-    user.last_sign_in_at = datetime.now(timezone.utc)
-    db.add(user)
-    await db.flush()
-
-    # Return tokens
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect email or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    
+    user.last_sign_in_at = datetime.utcnow()
+    
     access_token = create_access_token(str(user.id))
     refresh_token = create_refresh_token(str(user.id))
+    
     return TokenResponse(
-        access_token=access_token, refresh_token=refresh_token, token_type="bearer"
+        access_token=access_token,
+        refresh_token=refresh_token
     )
 
-
 async def refresh(db: AsyncSession, data: RefreshRequest) -> TokenResponse:
-    # Decode the refresh token
     try:
         payload = decode_token(data.refresh_token)
         if payload.get("type") != "refresh":
-            raise HTTPException(status_code=401, detail="Invalid token type")
-        user_id_str = payload.get("sub")
-        if not user_id_str:
-            raise HTTPException(
-                status_code=401, detail="Could not validate credentials"
-            )
-        try:
-            user_id = UUID(user_id_str)
-        except ValueError:
-            raise HTTPException(
-                status_code=401, detail="Could not validate credentials"
-            )
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token type")
+        user_id = payload.get("sub")
+        if not user_id:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token payload")
     except JWTError:
-        raise HTTPException(status_code=401, detail="Could not validate credentials")
-
-    # Fetch the user
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired token")
+    
     result = await db.execute(select(User).where(User.id == user_id))
     user = result.scalar_one_or_none()
+    
     if not user or user.status == UserStatus.deleted:
-        raise HTTPException(status_code=401, detail="Could not validate credentials")
-
-    # Return new access + refresh tokens
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found or deleted")
+    
     access_token = create_access_token(str(user.id))
     refresh_token = create_refresh_token(str(user.id))
+    
     return TokenResponse(
-        access_token=access_token, refresh_token=refresh_token, token_type="bearer"
+        access_token=access_token,
+        refresh_token=refresh_token
     )
 
-
 async def get_current_user(db: AsyncSession, token: str) -> User:
-    # Decode access token
     try:
         payload = decode_token(token)
         if payload.get("type") != "access":
-            raise HTTPException(status_code=401, detail="Invalid token type")
-        user_id_str = payload.get("sub")
-        if not user_id_str:
-            raise HTTPException(
-                status_code=401, detail="Could not validate credentials"
-            )
-        try:
-            user_id = UUID(user_id_str)
-        except ValueError:
-            raise HTTPException(
-                status_code=401, detail="Could not validate credentials"
-            )
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token type")
+        user_id = payload.get("sub")
+        if not user_id:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token payload")
     except JWTError:
-        raise HTTPException(status_code=401, detail="Could not validate credentials")
-
-    # Fetch user
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired token")
+    
     result = await db.execute(select(User).where(User.id == user_id))
     user = result.scalar_one_or_none()
-    if not user or user.status in [UserStatus.suspended, UserStatus.deleted]:
-        raise HTTPException(status_code=401, detail="Could not validate credentials")
-
+    
+    if not user:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
+    
+    if user.status == UserStatus.suspended or user.status == UserStatus.deleted:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Account is suspended or deleted")
+    
     return user

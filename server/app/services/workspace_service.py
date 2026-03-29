@@ -1,292 +1,180 @@
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
-from fastapi import HTTPException
 import secrets
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
+from uuid import UUID
+from sqlalchemy import select, update, delete
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.models.user import User
-from app.models.workspace import Workspace
-from app.models.workspace_member import WorkspaceMember
-from app.models.invitation import Invitation
+from app.models.workspace import Workspace, WorkspaceMember, Invitation
+from app.schemas.workspace import WorkspaceCreate, WorkspaceUpdate, InviteMemberRequest, UpdateMemberRoleRequest
 from app.enums import WorkspaceRole
-from app.schemas.workspace import (
-    WorkspaceCreate,
-    WorkspaceUpdate,
-    InviteMemberRequest,
-    UpdateMemberRoleRequest,
-)
-from app.enums import WorkspaceRole
+from app.exceptions import ConflictError, NotFoundError, ForbiddenError, ValidationError
 
-
-class ConflictError(HTTPException):
-    def __init__(self, detail: str):
-        super().__init__(status_code=409, detail=detail)
-
-
-class NotFoundError(HTTPException):
-    def __init__(self, detail: str):
-        super().__init__(status_code=404, detail=detail)
-
-
-class ForbiddenError(HTTPException):
-    def __init__(self, detail: str = "Insufficient permissions"):
-        super().__init__(status_code=403, detail=detail)
-
-
-class ValidationError(HTTPException):
-    def __init__(self, detail: str):
-        super().__init__(status_code=400, detail=detail)
-
-
-async def create_workspace(
-    db: AsyncSession, user: User, data: WorkspaceCreate
-) -> Workspace:
+async def create_workspace(db: AsyncSession, user: User, data: WorkspaceCreate) -> Workspace:
     # Check slug uniqueness
     result = await db.execute(select(Workspace).where(Workspace.slug == data.slug))
-    existing_workspace = result.scalar_one_or_none()
-    if existing_workspace:
+    if result.scalar_one_or_none():
         raise ConflictError("Slug already taken")
-
-    # Create Workspace row
+    
     workspace = Workspace(
         name=data.name,
         slug=data.slug,
-        timezone=data.timezone,
+        timezone=data.timezone
     )
     db.add(workspace)
     await db.flush()
-    await db.refresh(workspace)
-
-    # Create WorkspaceMember row with role=owner, accepted_at=now()
-    workspace_member = WorkspaceMember(
+    
+    # Create WorkspaceMember row as owner
+    member = WorkspaceMember(
         workspace_id=workspace.id,
         user_id=user.id,
         role=WorkspaceRole.owner,
-        accepted_at=datetime.now(timezone.utc),
+        accepted_at=datetime.utcnow()
     )
-    db.add(workspace_member)
-    await db.flush()
-
+    db.add(member)
     return workspace
 
-
-async def get_workspace(db: AsyncSession, workspace_id: str) -> Workspace:
-    # Fetch by ID, check deleted_at IS NULL
-    result = await db.execute(
-        select(Workspace).where(
-            Workspace.id == workspace_id, Workspace.deleted_at.is_(None)
-        )
-    )
+async def get_workspace(db: AsyncSession, workspace_id: UUID) -> Workspace:
+    result = await db.execute(select(Workspace).where(Workspace.id == workspace_id, Workspace.deleted_at.is_(None)))
     workspace = result.scalar_one_or_none()
     if not workspace:
-        raise NotFoundError("Workspace not found")
+        raise NotFoundError("Workspace")
     return workspace
 
-
-async def update_workspace(
-    db: AsyncSession, workspace: Workspace, data: WorkspaceUpdate
-) -> Workspace:
-    # Apply only the non-None fields from data
-    update_data = data.dict(exclude_unset=True)
-    for field, value in update_data.items():
-        setattr(workspace, field, value)
-
-    db.add(workspace)
-    await db.flush()
-    await db.refresh(workspace)
+async def update_workspace(db: AsyncSession, workspace: Workspace, data: WorkspaceUpdate) -> Workspace:
+    if data.name is not None:
+        workspace.name = data.name
+    if data.timezone is not None:
+        workspace.timezone = data.timezone
+    if data.logo_url is not None:
+        workspace.logo_url = data.logo_url
     return workspace
-
 
 async def list_user_workspaces(db: AsyncSession, user: User) -> list[Workspace]:
-    # Join WorkspaceMember where user_id = user.id and accepted_at IS NOT NULL
     result = await db.execute(
         select(Workspace)
-        .join(WorkspaceMember, Workspace.id == WorkspaceMember.workspace_id)
+        .join(WorkspaceMember)
         .where(
             WorkspaceMember.user_id == user.id,
             WorkspaceMember.accepted_at.is_not(None),
-            Workspace.deleted_at.is_(None),
+            Workspace.deleted_at.is_(None)
         )
     )
-    workspaces = result.scalars().all()
-    return list(workspaces)
+    return list(result.scalars().all())
 
-
-async def invite_member(
-    db: AsyncSession, workspace: Workspace, inviter: User, data: InviteMemberRequest
-) -> Invitation:
-    # Check invitee is not already a member
+async def invite_member(db: AsyncSession, workspace: Workspace, inviter: User, data: InviteMemberRequest) -> Invitation:
+    # Check if already a member
     result = await db.execute(
-        select(WorkspaceMember).where(
+        select(WorkspaceMember).join(User).where(
             WorkspaceMember.workspace_id == workspace.id,
-            WorkspaceMember.user_id.in_(
-                select(User.id).where(User.email == data.email)
-            ),
+            User.email == data.email,
+            WorkspaceMember.accepted_at.is_not(None)
         )
     )
-    existing_member = result.scalar_one_or_none()
-    if existing_member:
+    if result.scalar_one_or_none():
         raise ConflictError("User is already a member of this workspace")
-
-    # Check a pending invitation does not already exist for this email + workspace
+    
+    # Check for pending invitation
     result = await db.execute(
         select(Invitation).where(
             Invitation.workspace_id == workspace.id,
             Invitation.email == data.email,
             Invitation.accepted_at.is_(None),
+            Invitation.expires_at > datetime.utcnow()
         )
     )
-    existing_invitation = result.scalar_one_or_none()
-    if existing_invitation:
-        raise ConflictError("Invitation already sent to this email")
-
-    # Generate a secure random token
-    token = secrets.token_urlsafe(32)
-    # Set expires_at = now() + 7 days
-    expires_at = datetime.utcnow() + timedelta(days=7)
-
-    # Create Invitation row
+    if result.scalar_one_or_none():
+        raise ConflictError("A pending invitation already exists for this email")
+    
     invitation = Invitation(
         workspace_id=workspace.id,
-        invited_by=inviter.id,
         email=data.email,
         role=data.role,
-        token=token,
-        expires_at=expires_at,
+        token=secrets.token_urlsafe(32),
+        invited_by=inviter.id,
+        expires_at=datetime.utcnow() + timedelta(days=7)
     )
     db.add(invitation)
-    await db.flush()
-    await db.refresh(invitation)
-
-    # TODO: send invitation email (stub for now — just log the token)
-    print(f"Invitation token for {data.email}: {token}")
-
+    # Stub for sending email
+    print(f"Invitation token for {data.email}: {invitation.token}")
     return invitation
 
-
-async def accept_invitation(
-    db: AsyncSession, token: str, user: User
-) -> WorkspaceMember:
-    # Find invitation by token
+async def accept_invitation(db: AsyncSession, token: str, user: User) -> WorkspaceMember:
     result = await db.execute(select(Invitation).where(Invitation.token == token))
     invitation = result.scalar_one_or_none()
+    
     if not invitation:
-        raise ValidationError("Invalid invitation token")
-
-    # Check expires_at > now()
-    if invitation.expires_at < datetime.now(timezone.utc):
+        raise NotFoundError("Invitation")
+    
+    if invitation.expires_at < datetime.utcnow():
         raise ValidationError("Invitation expired")
-
-    # Check accepted_at IS NULL
+    
     if invitation.accepted_at is not None:
         raise ConflictError("Invitation already used")
-
-    # Check invitation.email == user.email
+    
     if invitation.email != user.email:
-        raise ForbiddenError("Invitation email does not match user email")
-
-    # Mark accepted_at = now()
-    invitation.accepted_at = datetime.now(timezone.utc)
-    db.add(invitation)
-    await db.flush()
-
-    # Check if workspace member already exists (edge case)
+        raise ForbiddenError("This invitation was sent to a different email address")
+    
+    invitation.accepted_at = datetime.utcnow()
+    
+    # Check if membership already exists (e.g. from a previous invitation or being added manually)
     result = await db.execute(
         select(WorkspaceMember).where(
             WorkspaceMember.workspace_id == invitation.workspace_id,
-            WorkspaceMember.user_id == user.id,
+            WorkspaceMember.user_id == user.id
         )
     )
-    existing_member = result.scalar_one_or_none()
-
-    if existing_member:
-        # Update existing member
-        existing_member.accepted_at = datetime.now(timezone.utc)
-        existing_member.role = invitation.role
-        db.add(existing_member)
-        await db.flush()
-        await db.refresh(existing_member)
-        return existing_member
+    member = result.scalar_one_or_none()
+    
+    if member:
+        member.role = invitation.role
+        member.accepted_at = datetime.utcnow()
     else:
-        # Create new WorkspaceMember row
-        workspace_member = WorkspaceMember(
+        member = WorkspaceMember(
             workspace_id=invitation.workspace_id,
             user_id=user.id,
             role=invitation.role,
-            invited_by=invitation.invited_by,
-            accepted_at=datetime.now(timezone.utc),
+            accepted_at=datetime.utcnow()
         )
-        db.add(workspace_member)
-        await db.flush()
-        await db.refresh(workspace_member)
-        return workspace_member
+        db.add(member)
+    
+    return member
 
-
-async def remove_member(
-    db: AsyncSession,
-    workspace: Workspace,
-    target_user_id: str,
-    requesting_member: WorkspaceMember,
-) -> None:
-    # Only owners and admins can remove members
+async def remove_member(db: AsyncSession, workspace: Workspace, target_user_id: UUID, requesting_member: WorkspaceMember):
     if requesting_member.role not in [WorkspaceRole.owner, WorkspaceRole.admin]:
-        raise ForbiddenError("Insufficient permissions to remove members")
-
-    # Get target member
+        raise ForbiddenError("Only owners and admins can remove members")
+    
     result = await db.execute(
         select(WorkspaceMember).where(
             WorkspaceMember.workspace_id == workspace.id,
-            WorkspaceMember.user_id == target_user_id,
-            WorkspaceMember.accepted_at.is_not(None),
+            WorkspaceMember.user_id == target_user_id
         )
     )
     target_member = result.scalar_one_or_none()
     if not target_member:
-        raise NotFoundError("Member not found in workspace")
-
-    # Owner cannot be removed
+        raise NotFoundError("Member")
+    
     if target_member.role == WorkspaceRole.owner:
-        raise ConflictError("Cannot remove workspace owner")
-
-    # Cannot remove yourself if you are the owner (already checked above)
-    # But also prevent self-removal for non-owners
-    if str(target_member.user_id) == str(requesting_member.user_id):
-        raise ConflictError("Cannot remove yourself from workspace")
-
-    # Delete the WorkspaceMember row
+        raise ForbiddenError("The workspace owner cannot be removed")
+        
     await db.delete(target_member)
-    await db.flush()
 
-
-async def update_member_role(
-    db: AsyncSession,
-    workspace: Workspace,
-    target_user_id: str,
-    data: UpdateMemberRoleRequest,
-    requesting_member: WorkspaceMember,
-) -> WorkspaceMember:
-    # Only owners can change roles
+async def update_member_role(db: AsyncSession, workspace: Workspace, target_user_id: UUID, data: UpdateMemberRoleRequest, requesting_member: WorkspaceMember) -> WorkspaceMember:
     if requesting_member.role != WorkspaceRole.owner:
-        raise ForbiddenError("Only workspace owner can change member roles")
-
-    # Get target member
+        raise ForbiddenError("Only owners can change member roles")
+    
     result = await db.execute(
         select(WorkspaceMember).where(
             WorkspaceMember.workspace_id == workspace.id,
-            WorkspaceMember.user_id == target_user_id,
-            WorkspaceMember.accepted_at.is_not(None),
+            WorkspaceMember.user_id == target_user_id
         )
     )
     target_member = result.scalar_one_or_none()
     if not target_member:
-        raise NotFoundError("Member not found in workspace")
-
-    # Cannot change the workspace owner's role
+        raise NotFoundError("Member")
+        
     if target_member.role == WorkspaceRole.owner:
-        raise ConflictError("Cannot change workspace owner's role")
-
-    # Update role
+        raise ForbiddenError("Cannot change the workspace owner's role")
+        
     target_member.role = data.role
-    db.add(target_member)
-    await db.flush()
-    await db.refresh(target_member)
     return target_member

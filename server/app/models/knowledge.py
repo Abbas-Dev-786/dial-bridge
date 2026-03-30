@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from sqlalchemy import String, DateTime, ForeignKey, Enum as SAEnum, Integer, BigInt, func
+from sqlalchemy import String, DateTime, ForeignKey, Enum as SAEnum, Integer, BigInteger, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.dialects.postgresql import JSONB
 
@@ -32,7 +32,7 @@ class KnowledgeDocument(AppBase):
     elevenlabs_kb_id: Mapped[str | None] = mapped_column(String)
     source_url: Mapped[str | None] = mapped_column(String)
     
-    file_size_bytes: Mapped[int | None] = mapped_column(BigInt)
+    file_size_bytes: Mapped[int | None] = mapped_column(BigInteger)
     page_count: Mapped[int | None] = mapped_column(Integer)
     chunk_count: Mapped[int | None] = mapped_column(Integer)
     

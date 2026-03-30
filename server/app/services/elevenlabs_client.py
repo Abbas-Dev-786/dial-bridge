@@ -59,16 +59,62 @@ class ElevenLabsClient:
         # Wait, the prompt says GET /voices. Let's stick to that.
         return data.get("voices", [])
 
-    # ── Knowledge base endpoints (used in Phase 6) ────────────
+    # ── Knowledge base endpoints ──────────────────────────────────────
 
-    async def create_kb_document(self, payload: dict) -> dict:
-        """POST /convai/agents/{agent_id}/add-to-knowledge-base"""
-        # Implemented in Phase 6
-        raise NotImplementedError
+    async def add_url_to_kb(self, agent_id: str, url: str, name: str) -> dict:
+        """
+        POST /convai/agents/{agent_id}/add-to-knowledge-base
+        Body: { "type": "url", "url": str, "name": str }
+        Returns: { "id": str }
+        """
+        return await self._request(
+            "POST",
+            f"/convai/agents/{agent_id}/add-to-knowledge-base",
+            json={"type": "url", "url": url, "name": name},
+        )
+
+    async def add_text_to_kb(self, agent_id: str, text: str, name: str) -> dict:
+        """
+        POST /convai/agents/{agent_id}/add-to-knowledge-base
+        Body: { "type": "text", "text": str, "name": str }
+        """
+        return await self._request(
+            "POST",
+            f"/convai/agents/{agent_id}/add-to-knowledge-base",
+            json={"type": "text", "text": text, "name": name},
+        )
+
+    async def add_file_to_kb(self, agent_id: str, file_content: bytes, filename: str) -> dict:
+        """
+        POST /convai/agents/{agent_id}/add-to-knowledge-base (multipart)
+        Used for PDF, DOCX, TXT uploads.
+        Returns: { "id": str }
+        """
+        response = await self._client.post(
+            f"/convai/agents/{agent_id}/add-to-knowledge-base",
+            content=file_content,
+            headers={
+                "Content-Disposition": f'attachment; filename="{filename}"',
+                "Content-Type": "application/octet-stream",
+            },
+        )
+        if not response.is_success:
+            raise ElevenLabsError(f"{response.status_code} — {response.text[:200]}")
+        return response.json() if response.content else {}
 
     async def delete_kb_document(self, agent_id: str, kb_id: str) -> None:
-        # Implemented in Phase 6
-        raise NotImplementedError
+        """
+        DELETE /convai/agents/{agent_id}/knowledge-base/{kb_id}
+        """
+        await self._request("DELETE", f"/convai/agents/{agent_id}/knowledge-base/{kb_id}")
+
+    async def list_kb_documents(self, agent_id: str) -> list[dict]:
+        """
+        GET /convai/agents/{agent_id}/knowledge-base
+        Returns list of documents currently on the EL agent.
+        """
+        data = await self._request("GET", f"/convai/agents/{agent_id}/knowledge-base")
+        return data.get("documents", [])
 
     # ── Telephony endpoints (used in Phase 4) ─────────────────
 

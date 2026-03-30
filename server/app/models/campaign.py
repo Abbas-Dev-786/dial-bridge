@@ -85,9 +85,9 @@ class Campaign(AppBase):
     phone_number: Mapped["PhoneNumber | None"] = relationship()
     
     # These models will be implemented in future phases
-    knowledge_documents = relationship("KnowledgeDocument", back_populates="campaign")
+    knowledge_documents: Mapped[list["KnowledgeDocument"]] = relationship("KnowledgeDocument", back_populates="campaign")
     kb_snapshots: Mapped[list["CampaignKBSnapshot"]] = relationship(
-        back_populates="campaign", cascade="all, delete-orphan"
+        "CampaignKBSnapshot", back_populates="campaign", cascade="all, delete-orphan"
     )
     contacts = relationship("Contact", back_populates="campaign")
     calls = relationship("Call", back_populates="campaign")
@@ -105,20 +105,3 @@ class Campaign(AppBase):
             ),
         ),
     )
-
-class CampaignKBSnapshot(AppBase):
-    __tablename__ = "campaign_kb_snapshots"
-
-    campaign_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("campaigns.id", ondelete="CASCADE"), nullable=False, index=True
-    )
-    elevenlabs_agent_id: Mapped[str | None] = mapped_column(String)
-    status_at_snapshot: Mapped[CampaignStatus] = mapped_column(
-        SAEnum(CampaignStatus, name="campaign_status")
-    )
-    trigger: Mapped[KBSnapshotTrigger] = mapped_column(
-        SAEnum(KBSnapshotTrigger, name="kb_snapshot_trigger")
-    )
-    documents: Mapped[list[dict]] = mapped_column(JSONB, nullable=False)
-
-    campaign: Mapped["Campaign"] = relationship(back_populates="kb_snapshots")

@@ -5,7 +5,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 from fastapi import status
 
-from app.models.campaign import Campaign, CampaignKBSnapshot
+from app.models.campaign import Campaign
+from app.models.knowledge import CampaignKBSnapshot, KnowledgeDocument
 from app.models.agent import Agent
 from app.models.phone_number import PhoneNumber
 from app.models.workspace import Workspace
@@ -29,19 +30,7 @@ from app.exceptions import (
 )
 from app.services.elevenlabs_client import get_elevenlabs_client
 
-# Placeholder for Phase 6 kb_service
-class KBServicePlaceholder:
-    async def sync_campaign_kb(self, db: AsyncSession, campaign: Campaign, workspace: Workspace):
-        """
-        Placeholder for Phase 6 KB sync.
-        Sets status to synced for now.
-        """
-        campaign.kb_sync_status = KBSyncStatus.synced
-        campaign.kb_last_synced_at = datetime.now()
-        db.add(campaign)
-        await db.flush()
-
-kb_service = KBServicePlaceholder()
+from app.services import kb_service
 
 async def create_campaign(db: AsyncSession, workspace: Workspace, user_id: uuid.UUID, data: CampaignCreate) -> Campaign:
     # 1. If agent_id provided: verify agent belongs to workspace
@@ -315,10 +304,30 @@ async def transition_status(db: AsyncSession, campaign: Campaign, new_status: Ca
     return campaign
 
 async def take_kb_snapshot(db: AsyncSession, campaign: Campaign, trigger: KBSnapshotTrigger) -> CampaignKBSnapshot:
-    docs_json = []
+    # Fetch all non-deleted KB docs for this campaign
+    result = await db.execute(
+        select(KnowledgeDocument).where(
+            and_(
+                KnowledgeDocument.campaign_id == campaign.id,
+                KnowledgeDocument.deleted_at.is_(None)
+            )
+        )
+    )
+    docs = result.scalars().all()
     
-    # In an ideal world, we'd eager load agent
-    # If not loaded, we might need a query
+    docs_json = [
+        {
+            "doc_id": str(doc.id),
+            "name": doc.name,
+            "doc_type": doc.doc_type,
+            "elevenlabs_kb_id": doc.elevenlabs_kb_id,
+            "status": doc.status,
+            "chunk_count": doc.chunk_count,
+            "last_synced_at": doc.last_synced_at.isoformat() if doc.last_synced_at else None,
+        }
+        for doc in docs
+    ]
+    
     if not campaign.agent:
         result = await db.execute(select(Agent).where(Agent.id == campaign.agent_id))
         agent = result.scalar_one_or_none()
@@ -330,8 +339,8 @@ async def take_kb_snapshot(db: AsyncSession, campaign: Campaign, trigger: KBSnap
     snapshot = CampaignKBSnapshot(
         campaign_id=campaign.id,
         elevenlabs_agent_id=elevenlabs_agent_id,
-        status_at_snapshot=campaign.status,
-        trigger=trigger,
+        campaign_status_at_snapshot=campaign.status,
+        triggered_by=trigger,
         documents=docs_json
     )
     db.add(snapshot)

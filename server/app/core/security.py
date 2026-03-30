@@ -1,7 +1,10 @@
+import base64
+import hashlib
 from datetime import datetime, timedelta
 from typing import Optional, Union
 from jose import JWTError, jwt
 from passlib.context import CryptContext
+from cryptography.fernet import Fernet
 from app.core.config import settings
 from app.schemas.user import TokenPayload
 
@@ -59,3 +62,26 @@ def decode_token(token: str) -> TokenPayload:
         return token_data
     except JWTError:
         raise JWTError("Could not validate credentials")
+
+
+# Encryption for sensitive data
+def _get_encryption_key() -> bytes:
+    """Generate a consistent 32-byte key from the app secret."""
+    h = hashlib.sha256(settings.SECRET_KEY.encode()).digest()
+    return base64.urlsafe_b64encode(h)
+
+def encrypt_value(value: str) -> str:
+    if not value:
+        return ""
+    f = Fernet(_get_encryption_key())
+    return f.encrypt(value.encode()).decode()
+
+def decrypt_value(encrypted_value: str) -> str:
+    if not encrypted_value:
+        return ""
+    try:
+        f = Fernet(_get_encryption_key())
+        return f.decrypt(encrypted_value.encode()).decode()
+    except Exception:
+        # In case it's not encrypted or key changed
+        return encrypted_value

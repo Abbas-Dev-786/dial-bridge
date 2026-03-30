@@ -18,6 +18,18 @@ class Settings(BaseSettings):
     elevenlabs_platform_api_key: str = ""
     frontend_url: str = "http://localhost:5173"
 
+    # Integrations
+    hubspot_client_id: str = ""
+    hubspot_client_secret: str = ""
+    salesforce_client_id: str = ""
+    salesforce_client_secret: str = ""
+    slack_client_id: str = ""
+    slack_client_secret: str = ""
+    google_cal_client_id: str = ""
+    google_cal_client_secret: str = ""
+    pipedrive_client_id: str = ""
+    pipedrive_client_secret: str = ""
+
     @property
     def is_production(self) -> bool:
         return self.app_env == "production"

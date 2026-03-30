@@ -20,9 +20,9 @@ class Workspace(AppBase):
         back_populates="workspace", cascade="all, delete-orphan"
     )
     agents: Mapped[list["Agent"]] = relationship(back_populates="workspace", cascade="all, delete-orphan")
-    # campaigns: Mapped[list["Campaign"]] = relationship(back_populates="workspace")
+    campaigns: Mapped[list["Campaign"]] = relationship(back_populates="workspace", cascade="all, delete-orphan")
     phone_numbers: Mapped[list["PhoneNumber"]] = relationship(back_populates="workspace", cascade="all, delete-orphan")
-    # integrations: Mapped[list["Integration"]] = relationship(back_populates="workspace")
+    integrations: Mapped[list["WorkspaceIntegration"]] = relationship(back_populates="workspace", cascade="all, delete-orphan")
 
 class WorkspaceMember(AppBase):
     __tablename__ = "workspace_members"

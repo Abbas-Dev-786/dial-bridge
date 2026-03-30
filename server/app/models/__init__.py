@@ -31,3 +31,4 @@ from app.models.user import User
 from app.models.workspace import Workspace, WorkspaceMember, Invitation, OAuthAccount
 from app.models.agent import Agent, AgentVoiceConfig, AgentConversationConfig, AgentTool
 from app.models.phone_number import PhoneNumber
+from app.models.campaign import Campaign, CampaignKBSnapshot

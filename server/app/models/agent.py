@@ -37,6 +37,7 @@ class Agent(AppBase):
 
     # Relationships
     workspace: Mapped["Workspace"] = relationship(back_populates="agents")
+    campaigns: Mapped[list["Campaign"]] = relationship(back_populates="agent")
     voice_config: Mapped["AgentVoiceConfig"] = relationship(
         back_populates="agent", uselist=False, cascade="all, delete-orphan"
     )
@@ -46,7 +47,7 @@ class Agent(AppBase):
     tools: Mapped[list["AgentTool"]] = relationship(
         back_populates="agent", cascade="all, delete-orphan"
     )
-    # campaigns: Mapped[list["Campaign"]] = relationship(back_populates="agent")
+    campaigns: Mapped[list["Campaign"]] = relationship(back_populates="agent")
 
 class AgentVoiceConfig(AppBase):
     __tablename__ = "agent_voice_configs"

@@ -41,6 +41,7 @@ class PhoneNumber(AppBase):
 
     # Relationships
     workspace: Mapped["Workspace"] = relationship(back_populates="phone_numbers")
+    campaigns: Mapped[list["Campaign"]] = relationship(back_populates="phone_number")
     # campaigns: Mapped[list["Campaign"]] = relationship(back_populates="phone_number")
 
     __table_args__ = (

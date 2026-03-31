@@ -5,7 +5,7 @@ from typing import Optional, Union
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 from cryptography.fernet import Fernet
-from app.core.config import settings
+from app.config import settings
 from app.schemas.user import TokenPayload
 
 # Password hashing
@@ -28,11 +28,11 @@ def create_access_token(
         expire = datetime.utcnow() + expires_delta
     else:
         expire = datetime.utcnow() + timedelta(
-            minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES
+            minutes=settings.access_token_expire_minutes
         )
     to_encode = {"exp": expire, "sub": str(subject), "token_type": "access"}
     encoded_jwt = jwt.encode(
-        to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM
+        to_encode, settings.app_secret_key, algorithm=settings.jwt_algorithm
     )
     return encoded_jwt
 
@@ -44,11 +44,11 @@ def create_refresh_token(
         expire = datetime.utcnow() + expires_delta
     else:
         expire = datetime.utcnow() + timedelta(
-            minutes=settings.REFRESH_TOKEN_EXPIRE_MINUTES
+            minutes=settings.refresh_token_expire_days * 24 * 60
         )
     to_encode = {"exp": expire, "sub": str(subject), "token_type": "refresh"}
     encoded_jwt = jwt.encode(
-        to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM
+        to_encode, settings.app_secret_key, algorithm=settings.jwt_algorithm
     )
     return encoded_jwt
 
@@ -56,7 +56,7 @@ def create_refresh_token(
 def decode_token(token: str) -> TokenPayload:
     try:
         payload = jwt.decode(
-            token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM]
+            token, settings.app_secret_key, algorithms=[settings.jwt_algorithm]
         )
         token_data = TokenPayload(**payload)
         return token_data
@@ -67,7 +67,7 @@ def decode_token(token: str) -> TokenPayload:
 # Encryption for sensitive data
 def _get_encryption_key() -> bytes:
     """Generate a consistent 32-byte key from the app secret."""
-    h = hashlib.sha256(settings.SECRET_KEY.encode()).digest()
+    h = hashlib.sha256(settings.app_secret_key.encode()).digest()
     return base64.urlsafe_b64encode(h)
 
 def encrypt_value(value: str) -> str:

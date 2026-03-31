@@ -37,7 +37,7 @@ class Contact(AppBase):
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     campaign: Mapped["Campaign"] = relationship(back_populates="contacts")
-    # calls: Mapped["Call"] = relationship(back_populates="contact")
+    calls: Mapped[list["Call"]] = relationship(back_populates="contact")
 
     __table_args__ = (
         Index(

@@ -12,3 +12,8 @@ class UserResponse(BaseModel):
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+class TokenPayload(BaseModel):
+    sub: str | None = None
+    exp: datetime | None = None
+    token_type: str | None = None

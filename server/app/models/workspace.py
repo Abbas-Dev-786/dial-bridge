@@ -14,6 +14,7 @@ class Workspace(AppBase):
     timezone: Mapped[str] = mapped_column(String, default="UTC")
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     elevenlabs_api_key_enc: Mapped[str | None] = mapped_column(String)
+    elevenlabs_webhook_secret_enc: Mapped[str | None] = mapped_column(String)
 
     # relationships
     members: Mapped[list["WorkspaceMember"]] = relationship(
@@ -23,6 +24,7 @@ class Workspace(AppBase):
     campaigns: Mapped[list["Campaign"]] = relationship(back_populates="workspace", cascade="all, delete-orphan")
     phone_numbers: Mapped[list["PhoneNumber"]] = relationship(back_populates="workspace", cascade="all, delete-orphan")
     integrations: Mapped[list["WorkspaceIntegration"]] = relationship(back_populates="workspace", cascade="all, delete-orphan")
+    calls: Mapped[list["Call"]] = relationship(back_populates="workspace", cascade="all, delete-orphan")
 
 class WorkspaceMember(AppBase):
     __tablename__ = "workspace_members"

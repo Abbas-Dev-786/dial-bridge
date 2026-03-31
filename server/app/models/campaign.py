@@ -89,9 +89,9 @@ class Campaign(AppBase):
     kb_snapshots: Mapped[list["CampaignKBSnapshot"]] = relationship(
         "CampaignKBSnapshot", back_populates="campaign", cascade="all, delete-orphan"
     )
-    contacts = relationship("Contact", back_populates="campaign")
-    calls = relationship("Call", back_populates="campaign")
-    integrations = relationship("CampaignIntegration", back_populates="campaign")
+    contacts: Mapped[list["Contact"]] = relationship("Contact", back_populates="campaign")
+    calls: Mapped[list["Call"]] = relationship("Call", back_populates="campaign")
+    integrations: Mapped[list["CampaignIntegration"]] = relationship("CampaignIntegration", back_populates="campaign")
 
     __table_args__ = (
         Index(

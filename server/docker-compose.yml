@@ -16,5 +16,43 @@ services:
     ports:
       - "6379:6379"
 
+  api:
+    build: .
+    command: fastapi run app/main.py --port 8000 --host 0.0.0.0
+    volumes:
+      - .:/app
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://dialbridge:password@db:5432/dialbridge
+      - REDIS_URL=redis://redis:6379/0
+    ports:
+      - "8000:8000"
+    depends_on:
+      - db
+      - redis
+
+  celery-worker:
+    build: .
+    command: celery -A app.background.celery_app worker --loglevel=info --concurrency=4
+    volumes:
+      - .:/app
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://dialbridge:password@db:5432/dialbridge
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      - db
+      - redis
+
+  celery-beat:
+    build: .
+    command: celery -A app.background.celery_app beat --loglevel=info
+    volumes:
+      - .:/app
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://dialbridge:password@db:5432/dialbridge
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      - db
+      - redis
+
 volumes:
   postgres_data:

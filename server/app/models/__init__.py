@@ -36,3 +36,5 @@ from app.models.knowledge import KnowledgeDocument, CampaignKBSnapshot
 from app.models.contact import Contact
 from app.models.integration import IntegrationProvider, WorkspaceIntegration, CampaignIntegration
 from app.models.call import Call, CallTranscript, CallEvaluation, CallCollectedData
+from app.models.stats import CampaignDailyStats
+from app.models.webhook import WorkspaceWebhookEndpoint, WebhookDelivery

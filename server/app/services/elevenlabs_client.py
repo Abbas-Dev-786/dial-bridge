@@ -150,6 +150,15 @@ class ElevenLabsClient:
             f"/convai/phone-numbers/{phone_number_id}/unassign",
         )
 
+    # ── Call endpoints ───────────────────────────────────────
+
+    async def initiate_call(self, payload: dict) -> dict:
+        """
+        POST /convai/twilio/outbound-call
+        Returns: { "conversation_id": str }
+        """
+        return await self._request("POST", "/convai/twilio/outbound-call", json=payload)
+
 
 async def get_elevenlabs_client(workspace) -> ElevenLabsClient:
     """

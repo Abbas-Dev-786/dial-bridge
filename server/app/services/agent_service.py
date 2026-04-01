@@ -10,6 +10,7 @@ from app.schemas.agent import AgentCreate, AgentUpdate, VoiceConfigCreate, Conve
 from app.services.elevenlabs_client import get_elevenlabs_client
 from app.enums import AgentStatus, ToolType
 from app.exceptions import NotFoundError, ConflictError, ElevenLabsError
+from app.utils.audit import log_action
 
 def build_elevenlabs_agent_payload(
     agent: Agent,
@@ -150,6 +151,11 @@ async def create_agent(db: AsyncSession, workspace: Workspace, user: User, data:
             resp = await client.create_agent(payload)
             agent.elevenlabs_agent_id = resp["agent_id"]
             agent.status = AgentStatus.live
+            
+            await log_action(
+                db, workspace.id, "agent.created", "agent", agent.id, actor_user_id=user.id
+            )
+            
             await db.commit()
     except Exception as e:
         await db.rollback()
@@ -206,6 +212,10 @@ async def update_agent(db: AsyncSession, workspace: Workspace, agent: Agent, dat
     
     async with client:
         await client.update_agent(agent.elevenlabs_agent_id, payload)
+    
+    await log_action(
+        db, workspace.id, "agent.updated", "agent", agent.id, actor_user_id=None # Add actor_user_id if service signature updated
+    )
     
     await db.commit()
     return agent
@@ -336,5 +346,9 @@ async def delete_agent(db: AsyncSession, workspace: Workspace, agent: Agent) -> 
         except Exception:
             # We still delete locally even if EL delete fails (e.g. already deleted in EL)
             pass
+    
+    await log_action(
+        db, workspace.id, "agent.deleted", "agent", agent.id
+    )
     
     await db.commit()

@@ -9,7 +9,7 @@ from sqlalchemy.orm import selectinload
 from app.background.celery_app import celery_app
 from app.background.utils import async_task
 from app.database import AsyncSessionLocal
-from app.models.webhook import WorkspaceWebhookEndpoint, WebhookDelivery
+from app.models.platform import WebhookEndpoint, WebhookDelivery
 from app.models.call import Call
 from app.enums import WebhookDeliveryStatus
 
@@ -92,10 +92,10 @@ async def enqueue_webhook_delivery(db, call: Call, event_type: str) -> None:
     """Helper to create delivery rows and enqueue tasks."""
     # Find active endpoints for this workspace and event type
     # For Postgres ARRAY, we use contains
-    stmt = select(WorkspaceWebhookEndpoint).where(
-        WorkspaceWebhookEndpoint.workspace_id == call.workspace_id,
-        WorkspaceWebhookEndpoint.is_active == True,
-        WorkspaceWebhookEndpoint.events.contains([event_type])
+    stmt = select(WebhookEndpoint).where(
+        WebhookEndpoint.workspace_id == call.workspace_id,
+        WebhookEndpoint.is_active == True,
+        WebhookEndpoint.events.contains([event_type])
     )
     result = await db.execute(stmt)
     endpoints = result.scalars().all()

@@ -1,12 +1,16 @@
-from typing import AsyncGenerator
+from typing import AsyncGenerator, Optional
 from uuid import UUID
-from fastapi import Depends
+import hashlib
+from datetime import datetime
+from fastapi import Depends, Header
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from sqlalchemy import select
+from sqlalchemy import select, func, or_
+from sqlalchemy.orm import joinedload
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import AsyncSessionLocal
 from app.models.user import User
-from app.models.workspace import WorkspaceMember
+from app.models.workspace import WorkspaceMember, Workspace
+from app.models.platform import APIKey
 from app.enums import WorkspaceRole
 from app.exceptions import ForbiddenError
 
@@ -21,6 +25,37 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
             raise
 
 security = HTTPBearer()
+
+async def get_api_key_workspace(
+    x_api_key: str | None = Header(None, alias="X-API-Key"),
+    db: AsyncSession = Depends(get_db),
+) -> Optional[Workspace]:
+    """
+    Validates the X-API-Key header. 
+    Returns the associated workspace if valid, else None.
+    """
+    if not x_api_key:
+        return None
+        
+    key_hash = hashlib.sha256(x_api_key.encode()).hexdigest()
+    stmt = (
+        select(APIKey)
+        .where(
+            APIKey.key_hash == key_hash,
+            APIKey.revoked_at.is_(None),
+            or_(APIKey.expires_at.is_(None), APIKey.expires_at > func.now())
+        )
+        .options(joinedload(APIKey.workspace))
+    )
+    result = await db.execute(stmt)
+    api_key = result.scalar_one_or_none()
+    
+    if not api_key:
+        return None
+        
+    # Update last_used_at
+    api_key.last_used_at = func.now()
+    return api_key.workspace
 
 async def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security),

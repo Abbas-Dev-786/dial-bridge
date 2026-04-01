@@ -29,6 +29,7 @@ from app.exceptions import (
     ElevenLabsError
 )
 from app.services.elevenlabs_client import get_elevenlabs_client
+from app.utils.audit import log_action
 
 from app.services import kb_service
 
@@ -72,6 +73,12 @@ async def create_campaign(db: AsyncSession, workspace: Workspace, user_id: uuid.
         **data.model_dump()
     )
     db.add(campaign)
+    await db.flush()
+    
+    await log_action(
+        db, workspace.id, "campaign.created", "campaign", campaign.id, actor_user_id=user_id
+    )
+    
     await db.commit()
     await db.refresh(campaign)
     return campaign
@@ -164,6 +171,11 @@ async def assign_agent(db: AsyncSession, campaign: Campaign, data: CampaignAssig
     
     campaign.agent_id = data.agent_id
     campaign.kb_sync_status = KBSyncStatus.pending
+    
+    await log_action(
+        db, campaign.workspace_id, "campaign.agent_assigned", "campaign", campaign.id,
+        diff={"agent_id": str(data.agent_id)}
+    )
     
     await db.commit()
     await db.refresh(campaign)
@@ -299,6 +311,11 @@ async def transition_status(db: AsyncSession, campaign: Campaign, new_status: Ca
         campaign.status = CampaignStatus.archived
         campaign.deleted_at = datetime.now()
 
+    await log_action(
+        db, campaign.workspace_id, "campaign.status_changed", "campaign", campaign.id,
+        diff={"old_status": current, "new_status": new_status}
+    )
+
     await db.commit()
     await db.refresh(campaign)
     return campaign
@@ -363,4 +380,9 @@ async def delete_campaign(db: AsyncSession, campaign: Campaign, workspace: Works
                 
     campaign.deleted_at = datetime.now()
     campaign.status = CampaignStatus.archived
+    
+    await log_action(
+        db, campaign.workspace_id, "campaign.deleted", "campaign", campaign.id
+    )
+    
     await db.commit()

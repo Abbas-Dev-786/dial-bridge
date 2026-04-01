@@ -9,6 +9,7 @@ from app.models.workspace import Workspace, WorkspaceMember, Invitation
 from app.schemas.workspace import WorkspaceCreate, WorkspaceUpdate, InviteMemberRequest, UpdateMemberRoleRequest
 from app.enums import WorkspaceRole
 from app.exceptions import ConflictError, NotFoundError, ForbiddenError, ValidationError
+from app.utils.audit import log_action
 
 async def create_workspace(db: AsyncSession, user: User, data: WorkspaceCreate) -> Workspace:
     # Check slug uniqueness
@@ -32,6 +33,11 @@ async def create_workspace(db: AsyncSession, user: User, data: WorkspaceCreate) 
         accepted_at=datetime.utcnow()
     )
     db.add(member)
+    
+    await log_action(
+        db, workspace.id, "workspace.created", "workspace", workspace.id, actor_user_id=user.id
+    )
+    
     return workspace
 
 async def get_workspace(db: AsyncSession, workspace_id: UUID) -> Workspace:
@@ -95,6 +101,12 @@ async def invite_member(db: AsyncSession, workspace: Workspace, inviter: User, d
         expires_at=datetime.utcnow() + timedelta(days=7)
     )
     db.add(invitation)
+    
+    await log_action(
+        db, workspace.id, "workspace.member_invited", "invitation", invitation.id, actor_user_id=inviter.id,
+        diff={"email": data.email, "role": data.role}
+    )
+    
     # Stub for sending email
     print(f"Invitation token for {data.email}: {invitation.token}")
     return invitation
@@ -158,6 +170,10 @@ async def remove_member(db: AsyncSession, workspace: Workspace, target_user_id: 
         raise ForbiddenError("The workspace owner cannot be removed")
         
     await db.delete(target_member)
+    
+    await log_action(
+        db, workspace.id, "workspace.member_removed", "user", target_user_id, actor_user_id=requesting_member.user_id
+    )
 
 async def update_member_role(db: AsyncSession, workspace: Workspace, target_user_id: UUID, data: UpdateMemberRoleRequest, requesting_member: WorkspaceMember) -> WorkspaceMember:
     if requesting_member.role != WorkspaceRole.owner:

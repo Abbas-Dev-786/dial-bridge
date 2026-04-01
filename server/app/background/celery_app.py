@@ -20,19 +20,29 @@ celery_app.conf.update(
     accept_content=["json"],
     timezone="UTC",
     enable_utc=True,
-    task_acks_late=True,           # acknowledge after task completes
-    worker_prefetch_multiplier=1,  # one task at a time per worker
+    # Acknowledge task only after it finishes
+    task_acks_late=True,
+    # One task at a time per worker process
+    worker_prefetch_multiplier=1,
+    # Route tasks to specific queues
+    task_routes={
+        "app.background.dialer.feed_campaign_contacts":     {"queue": "feeders"},
+        "app.background.dialer.dispatch_call":              {"queue": "calls"},
+        "app.background.dialer.recover_orphaned_feeders":   {"queue": "default"},
+        "app.background.outgoing_webhooks.deliver_webhook": {"queue": "webhooks"},
+        "app.background.kb_sync.*":                         {"queue": "default"},
+        "app.background.stats.*":                           {"queue": "default"},
+    },
 )
 
-# Periodic tasks schedule
+# Periodic tasks
 celery_app.conf.beat_schedule = {
-    # Run the dialer tick every 30 seconds
-    "dialer-tick": {
-        "task": "app.background.dialer.dialer_tick",
-        "schedule": 30.0,
-        "options": {"queue": "dialer"},
+    # Safety net to restart feeders if a worker dies
+    "recover-orphaned-feeders": {
+        "task": "app.background.dialer.recover_orphaned_feeders",
+        "schedule": 120.0,
     },
-    # Check for stale KB syncs every 5 minutes
+    # Check for pending KB syncs every 5 minutes
     "kb-sync-check": {
         "task": "app.background.kb_sync.check_pending_kb_syncs",
         "schedule": 300.0,
@@ -43,9 +53,3 @@ celery_app.conf.beat_schedule = {
         "schedule": crontab(hour=1, minute=0),
     },
 }
-
-# Optional: define queues if we want to separate workloads
-# celery_app.conf.task_routes = {
-#     "app.background.dialer.*": {"queue": "dialer"},
-#     "app.background.outgoing_webhooks.*": {"queue": "webhooks"},
-# }

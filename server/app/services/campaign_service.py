@@ -1,11 +1,13 @@
 import uuid
 from datetime import datetime
-from sqlalchemy import select, and_, or_, func
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
+from sqlalchemy import select, and_, or_, func, update
+from sqlalchemy.ext.asyncio import AsyncSession
+from celery.result import AsyncResult
 from fastapi import status
 
 from app.models.campaign import Campaign
+from app.models.contact import Contact
 from app.models.knowledge import CampaignKBSnapshot, KnowledgeDocument
 from app.models.agent import Agent
 from app.models.phone_number import PhoneNumber
@@ -20,7 +22,8 @@ from app.enums import (
     CampaignStatus, 
     KBSyncStatus, 
     KBSnapshotTrigger,
-    PhoneNumberStatus
+    PhoneNumberStatus,
+    ContactStatus
 )
 from app.exceptions import (
     NotFoundError, 
@@ -266,10 +269,28 @@ async def transition_status(db: AsyncSession, campaign: Campaign, new_status: Ca
             raise ElevenLabsError(str(e))
             
         campaign.status = CampaignStatus.live
+        
+        # Start the feeder — one per campaign, runs until paused/completed
+        from app.background.dialer import feed_campaign_contacts
+        new_task = feed_campaign_contacts.delay(str(campaign.id))
+        campaign.feeder_task_id = new_task.id
 
     elif new_status == CampaignStatus.paused:
+        _stop_feeder(campaign)
         campaign.status = CampaignStatus.paused
         await take_kb_snapshot(db, campaign, KBSnapshotTrigger.paused)
+        
+        # Reset contacts stuck in 'calling'
+        await db.execute(
+            update(Contact)
+            .where(
+                and_(
+                    Contact.campaign_id == campaign.id,
+                    Contact.status == ContactStatus.calling
+                )
+            )
+            .values(status=ContactStatus.pending, next_retry_at=None)
+        )
         
         result = await db.execute(select(PhoneNumber).where(PhoneNumber.id == campaign.phone_number_id))
         phone = result.scalar_one_or_none()
@@ -281,6 +302,7 @@ async def transition_status(db: AsyncSession, campaign: Campaign, new_status: Ca
                 pass
 
     elif new_status == CampaignStatus.completed:
+        _stop_feeder(campaign)
         campaign.status = CampaignStatus.completed
         await take_kb_snapshot(db, campaign, KBSnapshotTrigger.completed)
         
@@ -386,3 +408,10 @@ async def delete_campaign(db: AsyncSession, campaign: Campaign, workspace: Works
     )
     
     await db.commit()
+
+def _stop_feeder(campaign: Campaign) -> None:
+    """Revoke the active feeder task for a campaign."""
+    if campaign.feeder_task_id:
+        # terminate=False lets the current iteration finish cleanly
+        AsyncResult(campaign.feeder_task_id).revoke(terminate=False)
+        campaign.feeder_task_id = None

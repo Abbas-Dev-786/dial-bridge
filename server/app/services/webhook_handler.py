@@ -13,7 +13,6 @@ from app.models.agent import Agent
 from app.models.phone_number import PhoneNumber
 from app.enums import CallStatus, ContactStatus, TranscriptSpeaker
 from app.models.workspace import Workspace
-from app.background.stats import increment_daily_stats
 from app.background.outgoing_webhooks import enqueue_webhook_delivery
 
 logger = logging.getLogger(__name__)
@@ -171,8 +170,6 @@ async def handle_call_ended(db: AsyncSession, payload: dict) -> None:
         # Assuming total_calls field exists on Agent
         pass
 
-    # 4. Increment Daily Stats (Phase 10)
-    await increment_daily_stats(db, call)
 
 async def handle_transcript(db: AsyncSession, payload: dict) -> None:
     conversation_id = payload.get("conversation_id")

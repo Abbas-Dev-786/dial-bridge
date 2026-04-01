@@ -78,6 +78,7 @@ class Campaign(AppBase):
     total_spend_cents: Mapped[int] = mapped_column(Integer, default=0)
     
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    feeder_task_id: Mapped[str | None] = mapped_column(String, nullable=True)
 
     # Relationships
     workspace: Mapped["Workspace"] = relationship(back_populates="campaigns")

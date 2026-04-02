@@ -79,6 +79,10 @@ class Campaign(AppBase):
     
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     feeder_task_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    
+    # Agent generation metadata
+    agent_was_generated: Mapped[bool] = mapped_column(Boolean, default=False)
+    agent_generation_failed: Mapped[bool] = mapped_column(Boolean, default=False)
 
     # Relationships
     workspace: Mapped["Workspace"] = relationship(back_populates="campaigns")

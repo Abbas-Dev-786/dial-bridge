@@ -4,10 +4,18 @@ from pydantic import BaseModel, ConfigDict, Field
 from app.enums import CampaignStatus, KBSyncStatus, RetryOnOutcome
 
 class CampaignCreate(BaseModel):
+    """
+    Minimal creation payload. Name and goal are all the user provides.
+    The agent is generated automatically from the goal.
+    All other settings have sensible defaults and can be changed later.
+    """
     name: str = Field(..., min_length=2, max_length=80)
-    goal_description: str | None = None
-    agent_id: UUID | None = None
-    phone_number_id: UUID | None = None
+    goal_description: str = Field(
+        ...,
+        min_length=10,
+        max_length=500,
+        description="Plain-English description of what this campaign should achieve.",
+    )
     timezone: str = "US/Eastern"
     schedule_days: list[str] = ["Mon", "Tue", "Wed", "Thu", "Fri"]
     schedule_start_time: str = "09:00"  # HH:MM
@@ -49,11 +57,23 @@ class CampaignUpdate(BaseModel):
     leave_voicemail: bool | None = None
     caller_id_display_name: str | None = None
 
-class CampaignAssignAgent(BaseModel):
-    agent_id: UUID
-
 class CampaignAssignPhoneNumber(BaseModel):
     phone_number_id: UUID
+
+class AgentGenerationPreview(BaseModel):
+    """
+    Returned inside CampaignResponse to show the user what was generated.
+    Allows them to understand the auto-configuration at a glance.
+    """
+    agent_name: str
+    first_message: str
+    system_prompt_preview: str   # first 200 chars of system_prompt
+    voice_name: str | None
+    tools_enabled: list[str]
+    was_generated: bool
+    generation_failed: bool
+    # Message shown in UI when generation fell back to defaults
+    fallback_warning: str | None = None
 
 class CampaignStatusTransition(BaseModel):
     status: CampaignStatus
@@ -67,9 +87,10 @@ class CampaignResponse(BaseModel):
     goal_description: str | None
     status: CampaignStatus
     agent_id: UUID | None
-    agent_name: str | None = None        # denormalized for UI
+    agent_name: str | None = None
+    agent_generation: AgentGenerationPreview | None = None
     phone_number_id: UUID | None
-    phone_number: str | None = None      # denormalized for UI
+    phone_number: str | None = None
     kb_sync_status: KBSyncStatus
     kb_last_synced_at: datetime | None
     timezone: str
@@ -100,6 +121,7 @@ class CampaignListItem(BaseModel):
     name: str
     status: CampaignStatus
     agent_name: str | None = None
+    agent_was_generated: bool
     contacts_total: int
     contacts_called: int
     calls_successful: int

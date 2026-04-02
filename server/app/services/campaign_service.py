@@ -15,8 +15,9 @@ from app.models.workspace import Workspace
 from app.schemas.campaign import (
     CampaignCreate, 
     CampaignUpdate, 
-    CampaignAssignAgent, 
-    CampaignAssignPhoneNumber
+    CampaignAssignPhoneNumber,
+    AgentGenerationPreview,
+    CampaignResponse
 )
 from app.enums import (
     CampaignStatus, 
@@ -35,55 +36,70 @@ from app.services.elevenlabs_client import get_elevenlabs_client
 from app.utils.audit import log_action
 
 from app.services import kb_service
+from app.models.user import User
+from app.schemas.agent import AgentUpdate
 
-async def create_campaign(db: AsyncSession, workspace: Workspace, user_id: uuid.UUID, data: CampaignCreate) -> Campaign:
-    # 1. If agent_id provided: verify agent belongs to workspace
-    if data.agent_id:
-        result = await db.execute(select(Agent).where(Agent.id == data.agent_id))
-        agent = result.scalar_one_or_none()
-        if not agent or agent.workspace_id != workspace.id:
-            raise NotFoundError("Agent")
-        
-        # 2. If agent_id provided: verify agent is not in another active campaign
-        result = await db.execute(
-            select(Campaign).where(
-                and_(
-                    Campaign.agent_id == data.agent_id,
-                    Campaign.status.in_([CampaignStatus.live, CampaignStatus.scheduled]),
-                    Campaign.deleted_at.is_(None)
-                )
-            )
-        )
-        blocking_campaign = result.scalar_one_or_none()
-        if blocking_campaign:
-            raise ConflictError(
-                f"{agent.name} is active in '{blocking_campaign.name}'. Pause that campaign first."
-            )
+async def create_campaign(
+    db: AsyncSession,
+    workspace: Workspace,
+    user: User,
+    data: CampaignCreate,
+) -> Campaign:
+    from app.services.agent_generation_service import (
+        generate_agent_config,
+        build_agent_create,
+    )
+    from app.services.agent_service import create_agent
 
-    # 3. If phone_number_id provided: verify number belongs to workspace and is active
-    if data.phone_number_id:
-        result = await db.execute(select(PhoneNumber).where(PhoneNumber.id == data.phone_number_id))
-        phone = result.scalar_one_or_none()
-        if not phone or phone.workspace_id != workspace.id:
-            raise NotFoundError("PhoneNumber")
-        if phone.status != PhoneNumberStatus.active:
-            raise ValidationError("Phone number is not active")
+    # 1. Generate agent config from the campaign goal via Gemini
+    generated_config, was_generated = await generate_agent_config(
+        goal=data.goal_description,
+        workspace_name=workspace.name,
+    )
 
-    # 4. Create Campaign row, status = draft
+    # 2. Build AgentCreate from the generated config
+    agent_create = build_agent_create(generated_config, data.name)
+
+    # 3. Create the agent (pushes to ElevenLabs internally)
+    agent = await create_agent(db, workspace, user, agent_create)
+
+    # 4. Create the Campaign row
     campaign = Campaign(
-        workspace_id=workspace.id,
-        created_by=user_id,
-        **data.model_dump()
+        workspace_id           = workspace.id,
+        created_by             = user.id,
+        name                   = data.name,
+        goal_description       = data.goal_description,
+        status                 = CampaignStatus.draft,
+        agent_id               = agent.id,
+        kb_sync_status         = KBSyncStatus.pending,
+        agent_was_generated    = was_generated,
+        agent_generation_failed= not was_generated,
+        timezone               = data.timezone,
+        schedule_days          = data.schedule_days,
+        schedule_start_time    = datetime.strptime(data.schedule_start_time, "%H:%M").time(),
+        schedule_end_time      = datetime.strptime(data.schedule_end_time, "%H:%M").time(),
+        start_date             = data.start_date,
+        end_date               = data.end_date,
+        max_concurrency        = data.max_concurrency,
+        max_retries            = data.max_retries,
+        retry_delay_minutes    = data.retry_delay_minutes,
+        retry_on_outcomes      = data.retry_on_outcomes,
+        dnc_check_enabled      = data.dnc_check_enabled,
+        record_calls           = data.record_calls,
+        tcpa_mode              = data.tcpa_mode,
+        voicemail_detection    = data.voicemail_detection,
+        leave_voicemail        = data.leave_voicemail,
+        caller_id_display_name = data.caller_id_display_name,
     )
     db.add(campaign)
     await db.flush()
     
     await log_action(
-        db, workspace.id, "campaign.created", "campaign", campaign.id, actor_user_id=user_id
+        db, workspace.id, "campaign.created", "campaign", campaign.id, actor_user_id=user.id
     )
     
     await db.commit()
-    await db.refresh(campaign)
+    await db.refresh(campaign, ["agent"])
     return campaign
 
 async def get_campaign(db: AsyncSession, workspace_id: uuid.UUID, campaign_id: uuid.UUID) -> Campaign:
@@ -138,51 +154,17 @@ async def update_campaign(db: AsyncSession, campaign: Campaign, data: CampaignUp
                 raise ConflictError(f"Cannot change {field} while campaign is live. Pause it first.")
     
     for key, value in update_data.items():
+        if key == "schedule_start_time" and isinstance(value, str):
+            value = datetime.strptime(value, "%H:%M").time()
+        if key == "schedule_end_time" and isinstance(value, str):
+            value = datetime.strptime(value, "%H:%M").time()
         setattr(campaign, key, value)
     
     await db.commit()
     await db.refresh(campaign)
     return campaign
 
-async def assign_agent(db: AsyncSession, campaign: Campaign, data: CampaignAssignAgent) -> Campaign:
-    if campaign.status == CampaignStatus.live:
-        raise ConflictError("Cannot reassign agent to a live campaign. Pause it first.")
-    
-    result = await db.execute(select(Agent).where(Agent.id == data.agent_id))
-    agent = result.scalar_one_or_none()
-    if not agent or agent.workspace_id != campaign.workspace_id:
-        raise NotFoundError("Agent")
-    
-    result = await db.execute(
-        select(Campaign).where(
-            and_(
-                Campaign.agent_id == data.agent_id,
-                Campaign.status.in_([CampaignStatus.live, CampaignStatus.scheduled]),
-                Campaign.deleted_at.is_(None),
-                Campaign.id != campaign.id
-            )
-        )
-    )
-    blocking_campaign = result.scalar_one_or_none()
-    if blocking_campaign:
-        raise ConflictError(
-            f"{agent.name} is active in '{blocking_campaign.name}'. Pause that campaign first."
-        )
-    
-    if campaign.agent_id and campaign.kb_sync_status == KBSyncStatus.synced:
-        await take_kb_snapshot(db, campaign, KBSnapshotTrigger.agent_reassigned)
-    
-    campaign.agent_id = data.agent_id
-    campaign.kb_sync_status = KBSyncStatus.pending
-    
-    await log_action(
-        db, campaign.workspace_id, "campaign.agent_assigned", "campaign", campaign.id,
-        diff={"agent_id": str(data.agent_id)}
-    )
-    
-    await db.commit()
-    await db.refresh(campaign)
-    return campaign
+# assign_agent removed - agents are auto-created and managed via agent detail endpoints.
 
 async def assign_phone_number(db: AsyncSession, campaign: Campaign, data: CampaignAssignPhoneNumber) -> Campaign:
     if campaign.status == CampaignStatus.live:
@@ -408,6 +390,71 @@ async def delete_campaign(db: AsyncSession, campaign: Campaign, workspace: Works
     )
     
     await db.commit()
+
+def build_campaign_response(campaign: Campaign) -> CampaignResponse:
+    agent_gen = None
+    if campaign.agent:
+        agent = campaign.agent
+        tools_enabled = [
+            t.name for t in (agent.tools or []) if t.is_enabled
+        ]
+        voice_name = agent.voice_config.voice_name if agent.voice_config else None
+        system_prompt = agent.system_prompt or ""
+
+        fallback_warning = None
+        if campaign.agent_generation_failed:
+            fallback_warning = (
+                "AI agent generation failed. A default agent was created. "
+                "Review the system prompt and adjust it for your campaign goal."
+            )
+
+        agent_gen = AgentGenerationPreview(
+            agent_name=agent.name,
+            first_message=agent.first_message or "",
+            system_prompt_preview=system_prompt[:200] + ("..." if len(system_prompt) > 200 else ""),
+            voice_name=voice_name,
+            tools_enabled=tools_enabled,
+            was_generated=campaign.agent_was_generated,
+            generation_failed=campaign.agent_generation_failed,
+            fallback_warning=fallback_warning,
+        )
+
+    return CampaignResponse(
+        id=campaign.id,
+        workspace_id=campaign.workspace_id,
+        name=campaign.name,
+        goal_description=campaign.goal_description,
+        status=campaign.status,
+        agent_id=campaign.agent_id,
+        agent_name=campaign.agent.name if campaign.agent else None,
+        agent_generation=agent_gen,
+        phone_number_id=campaign.phone_number_id,
+        phone_number=campaign.phone_number.number if campaign.phone_number else None,
+        kb_sync_status=campaign.kb_sync_status,
+        kb_last_synced_at=campaign.kb_last_synced_at,
+        timezone=campaign.timezone,
+        schedule_days=campaign.schedule_days,
+        schedule_start_time=campaign.schedule_start_time.strftime("%H:%M"),
+        schedule_end_time=campaign.schedule_end_time.strftime("%H:%M"),
+        max_concurrency=campaign.max_concurrency,
+        max_retries=campaign.max_retries,
+        retry_delay_minutes=campaign.retry_delay_minutes,
+        retry_on_outcomes=campaign.retry_on_outcomes,
+        dnc_check_enabled=campaign.dnc_check_enabled,
+        record_calls=campaign.record_calls,
+        tcpa_mode=campaign.tcpa_mode,
+        voicemail_detection=campaign.voicemail_detection,
+        leave_voicemail=campaign.leave_voicemail,
+        contacts_total=campaign.contacts_total,
+        contacts_called=campaign.contacts_called,
+        contacts_remaining=campaign.contacts_remaining,
+        calls_successful=campaign.calls_successful,
+        calls_failed=campaign.calls_failed,
+        total_spend_cents=campaign.total_spend_cents,
+        created_at=campaign.created_at,
+        updated_at=campaign.updated_at,
+    )
+
 
 def _stop_feeder(campaign: Campaign) -> None:
     """Revoke the active feeder task for a campaign."""

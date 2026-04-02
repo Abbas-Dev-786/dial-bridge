@@ -16,6 +16,8 @@ class Settings(BaseSettings):
     refresh_token_expire_days: int = 30
 
     elevenlabs_platform_api_key: str = ""
+    gemini_api_key: str = ""
+    gemini_model: str = "gemini-1.5-pro"
     frontend_url: str = "http://localhost:5173"
 
     # Integrations

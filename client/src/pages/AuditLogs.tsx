@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { DataTable, Column } from "@/components/DataTable";
+import { DataTable, Column } from "@/components/shared/DataTable";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";

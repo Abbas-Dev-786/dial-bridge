@@ -10,7 +10,7 @@ import {
   Bot,
   ScrollText,
 } from "lucide-react";
-import { NavLink } from "@/components/NavLink";
+import { NavLink } from "@/components/shared/NavLink";
 import {
   Sidebar,
   SidebarContent,

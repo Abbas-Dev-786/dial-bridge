@@ -1,10 +1,8 @@
 import { useNavigate, useParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { StatusBadge } from "@/components/StatusBadge";
-import { cn } from "@/lib/utils";
-import { ChevronLeft, Download, Flag, Play, Pause } from "lucide-react";
-import { useState } from "react";
+import { ChevronLeft, Download, Flag } from "lucide-react";
+import { CallMetadataCard } from "@/components/call-detail/CallMetadataCard";
+import { CallAudioPlayer, CallTranscript } from "@/components/call-detail/CallTranscript";
 
 const metadata = {
   contact: "+1 (555) 123-4567",
@@ -58,149 +56,53 @@ const collectedData = [
 export default function CallDetail() {
   const navigate = useNavigate();
   const { id } = useParams();
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [playbackSpeed, setPlaybackSpeed] = useState(1);
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-3">
-        <Button variant="ghost" size="icon" onClick={() => navigate("/calls")}>
-          <ChevronLeft className="h-4 w-4" />
-        </Button>
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Conversation Detail</h1>
-          <p className="text-sm text-muted-foreground font-mono">{metadata.conversationId}</p>
+    <div className="space-y-6 max-w-6xl mx-auto pb-10 px-4">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <Button variant="ghost" size="icon" onClick={() => navigate("/calls")}>
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight">Conversation Detail</h1>
+            <p className="text-xs text-muted-foreground font-mono tracking-wider">{metadata.conversationId}</p>
+          </div>
+        </div>
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" className="hidden sm:flex">
+             Share
+          </Button>
+          <Button variant="outline" size="sm">
+            <Download className="mr-2 h-3.5 w-3.5" /> Export
+          </Button>
         </div>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-5">
-        {/* Left Column */}
+        {/* Left Column — Metadata */}
         <div className="lg:col-span-2 space-y-4">
-          <div className="rounded-xl border bg-card p-4 shadow-sm space-y-3">
-            <h3 className="font-semibold text-sm">Conversation Info</h3>
-            <div className="space-y-2 text-sm">
-              {[
-                { label: "Contact", value: metadata.contact, mono: true },
-                { label: "Agent", value: metadata.agent },
-                { label: "Model", value: metadata.model },
-                { label: "Voice", value: metadata.voice },
-                { label: "Direction", value: metadata.direction },
-                { label: "Date", value: metadata.date },
-                { label: "Duration", value: metadata.duration, mono: true },
-              ].map((item) => (
-                <div key={item.label} className="flex justify-between">
-                  <span className="text-muted-foreground">{item.label}</span>
-                  <span className={item.mono ? "font-mono" : ""}>{item.value}</span>
-                </div>
-              ))}
-              <div className="flex justify-between items-center">
-                <span className="text-muted-foreground">Status</span>
-                <StatusBadge status={metadata.status} />
-              </div>
-            </div>
-          </div>
-
-          <div className="rounded-xl border bg-card p-4 shadow-sm space-y-3">
-            <h3 className="font-semibold text-sm">Cost Breakdown</h3>
-            {costBreakdown.map((item) => (
-              <div key={item.label} className={cn("flex justify-between text-sm", item.bold && "font-semibold border-t pt-2")}>
-                <span className={item.bold ? "" : "text-muted-foreground"}>{item.label}</span>
-                <span className="font-mono">{item.value}</span>
-              </div>
-            ))}
-          </div>
-
-          <div className="rounded-xl border bg-card p-4 shadow-sm space-y-3">
-            <h3 className="font-semibold text-sm">Evaluation Criteria</h3>
-            {evaluations.map((e) => (
-              <div key={e.criteria} className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">{e.criteria}</span>
-                <Badge variant={e.passed ? "default" : "secondary"} className={cn("text-xs", e.passed ? "bg-success text-success-foreground" : "")}>
-                  {e.passed ? "Pass" : "Fail"}
-                </Badge>
-              </div>
-            ))}
-          </div>
-
-          <div className="rounded-xl border bg-card p-4 shadow-sm space-y-3">
-            <h3 className="font-semibold text-sm">Collected Data</h3>
-            {collectedData.map((d) => (
-              <div key={d.field} className="flex justify-between text-sm">
-                <span className="text-muted-foreground">{d.field}</span>
-                <span className="font-medium">{d.value}</span>
-              </div>
-            ))}
-          </div>
+          <CallMetadataCard 
+            metadata={metadata} 
+            costBreakdown={costBreakdown} 
+            evaluations={evaluations} 
+            collectedData={collectedData} 
+          />
 
           <div className="flex flex-col gap-2">
-            <Button variant="outline" size="sm"><Download className="mr-2 h-3.5 w-3.5" /> Download Recording</Button>
-            <Button variant="outline" size="sm"><Download className="mr-2 h-3.5 w-3.5" /> Export Transcript</Button>
-            <Button variant="outline" size="sm"><Flag className="mr-2 h-3.5 w-3.5" /> Flag for Review</Button>
+            <Button variant="secondary" size="sm" className="w-full">
+              <Download className="mr-2 h-3.5 w-3.5" /> Download Recording
+            </Button>
+            <Button variant="secondary" size="sm" className="w-full">
+              <Flag className="mr-2 h-3.5 w-3.5" /> Flag for Review
+            </Button>
           </div>
         </div>
 
-        {/* Right Column — Transcript */}
+        {/* Right Column — Transcript & Player */}
         <div className="lg:col-span-3 space-y-4">
-          {/* Audio Player */}
-          <div className="rounded-xl border bg-card p-4 shadow-sm space-y-3">
-            <div className="flex items-center gap-3">
-              <Button size="icon" variant="outline" className="h-10 w-10 rounded-full" onClick={() => setIsPlaying(!isPlaying)}>
-                {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
-              </Button>
-              <div className="flex-1">
-                <div className="h-8 rounded bg-muted flex items-end gap-px px-1">
-                  {Array.from({ length: 60 }).map((_, i) => (
-                    <div key={i} className="flex-1 rounded-t bg-primary/30" style={{ height: `${Math.random() * 100}%` }} />
-                  ))}
-                </div>
-              </div>
-              <span className="text-xs font-mono text-muted-foreground">0:00 / 3:42</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-muted-foreground">Speed:</span>
-              {[1, 1.5, 2].map((s) => (
-                <Button key={s} variant={playbackSpeed === s ? "default" : "ghost"} size="sm" className="h-6 px-2 text-xs" onClick={() => setPlaybackSpeed(s)}>
-                  {s}x
-                </Button>
-              ))}
-            </div>
-          </div>
-
-          {/* Turn-by-turn Transcript */}
-          <div className="rounded-xl border bg-card p-4 shadow-sm space-y-3">
-            <h3 className="font-semibold text-sm">Turn-by-Turn Transcript</h3>
-            <div className="space-y-3">
-              {transcript.map((line, i) => (
-                <div key={i} className={cn(
-                  "flex",
-                  line.speaker === "agent" ? "justify-start" : line.speaker === "tool" ? "justify-center" : "justify-end"
-                )}>
-                  {line.speaker === "tool" ? (
-                    <div className="rounded-lg bg-muted px-3 py-2 font-mono text-xs text-muted-foreground">
-                      {line.text}
-                      <span className="ml-2 text-primary">{line.latency}</span>
-                    </div>
-                  ) : (
-                    <div className={cn(
-                      "max-w-[85%] rounded-xl px-4 py-2.5",
-                      line.speaker === "agent" ? "bg-primary/10" : "bg-muted"
-                    )}>
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="text-[10px] font-semibold uppercase text-muted-foreground">
-                          {line.speaker === "agent" ? "Agent" : "User"}
-                        </span>
-                        {line.latency !== "—" && (
-                          <span className="text-[10px] font-mono text-primary">{line.latency}</span>
-                        )}
-                      </div>
-                      <p className="text-sm">{line.text}</p>
-                      <button className="text-[10px] text-primary hover:underline mt-1">{line.time}</button>
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
+          <CallAudioPlayer duration={metadata.duration} />
+          <CallTranscript transcript={transcript} />
         </div>
       </div>
     </div>

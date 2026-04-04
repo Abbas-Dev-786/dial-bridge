@@ -1,8 +1,8 @@
 import { useNavigate } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
-import { StatusBadge } from "@/components/StatusBadge";
+import { StatusBadge } from "@/components/shared/StatusBadge";
 import { BookOpen, FileText, File } from "lucide-react";
-import { EmptyState } from "@/components/EmptyState";
+import { EmptyState } from "@/components/shared/EmptyState";
 
 const documents = [
   { id: "1", name: "Product Overview 2024.pdf", size: "2.4 MB", pages: 32, campaign: "Q1 Outreach", status: "live" as const, lastSync: "2 hrs ago" },

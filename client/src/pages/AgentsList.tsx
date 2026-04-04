@@ -1,9 +1,9 @@
 import { useNavigate } from "react-router-dom";
-import { DataTable, Column } from "@/components/DataTable";
-import { StatusBadge } from "@/components/StatusBadge";
+import { DataTable, Column } from "@/components/shared/DataTable";
+import { StatusBadge } from "@/components/shared/StatusBadge";
 import { Badge } from "@/components/ui/badge";
 import { Bot } from "lucide-react";
-import { EmptyState } from "@/components/EmptyState";
+import { EmptyState } from "@/components/shared/EmptyState";
 
 const agents = [
   { id: "1", name: "Sales Bot Pro", status: "live" as const, model: "GPT-4o", voice: "Rachel", activeCampaign: "Q1 Outreach" as string | null },

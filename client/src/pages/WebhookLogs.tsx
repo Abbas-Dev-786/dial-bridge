@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { DataTable, Column } from "@/components/DataTable";
-import { StatusBadge } from "@/components/StatusBadge";
+import { DataTable, Column } from "@/components/shared/DataTable";
+import { StatusBadge } from "@/components/shared/StatusBadge";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";

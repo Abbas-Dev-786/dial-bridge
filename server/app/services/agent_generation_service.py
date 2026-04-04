@@ -2,11 +2,10 @@ import json
 import logging
 from typing import Any, Literal
 
-import google.generativeai as genai
-from google.generativeai.types import GenerationConfig
+import httpx
+from groq import AsyncGroq
 from pydantic import BaseModel, Field, field_validator
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
-import google.api_core.exceptions as google_exceptions
 
 from app.config import settings
 from app.enums import (
@@ -18,9 +17,10 @@ from app.schemas.agent import (
 
 logger = logging.getLogger(__name__)
 
-# Configure the Gemini client once at module load
-if settings.gemini_api_key:
-    genai.configure(api_key=settings.gemini_api_key)
+# Configure the Groq client
+groq_client: AsyncGroq | None = None
+if settings.groq_api_key:
+    groq_client = AsyncGroq(api_key=settings.groq_api_key)
 
 # ── Voice Options Catalogue ───────────────────────────────────────────────────
 
@@ -85,29 +85,37 @@ class GeneratedAgentConfig(BaseModel):
 # ── Gemini Prompt ─────────────────────────────────────────────────────────────
 
 SYSTEM_INSTRUCTION = """\
-You are an expert at configuring AI voice calling agents for outbound sales \
-and support campaigns.
+You are an expert at configuring AI voice calling agents for outbound sales and support campaigns.
+Given a campaign goal, you generate a complete agent configuration optimized for natural, effective phone conversations.
 
-Given a campaign goal, you generate a complete agent configuration optimised \
-for natural, effective phone conversations.
+RULES:
+- System prompts must be for VOICE (short sentences, no markdown, conversational).
+- The first message must start with a greeting and use {{contact_name}}.
+- Use only valid voice IDs from the list provided.
+- Return ONLY valid JSON that matches the following schema exactly.
+- DO NOT return JSON objects for tools, ONLY a list of literal strings.
+- DO NOT return JSON for the rationale as an object, it must be a string.
 
-Rules you must follow:
-- System prompts must be written for VOICE, not text. Short sentences. \
-  No bullet points. No markdown. Conversational tone.
-- The system prompt must tell the agent exactly what to do, how to handle \
-  objections, and when to end the call.
-- The first message must always start with a greeting and use {{contact_name}} \
-  to address the contact by name.
-- The first message must sound natural when spoken aloud — no formal salutations.
-- Choose a voice that matches the campaign's tone (sales = confident, \
-  support = warm, survey = friendly).
-- Only enable data_collection if the goal implies collecting specific information.
-- Only include calendar_booking tool if the goal is to schedule meetings.
-- Only include crm_lookup if the agent needs to look up account information.
-- end_call must always be included.
-- Do not invent tools that are not in the allowed list.
-- Return ONLY valid JSON. No explanation. No markdown code blocks. \
-  No preamble. Raw JSON only.
+SCHEMA:
+{
+  "agent_name": "string (2-80 chars)",
+  "system_prompt": "string (min 50 chars)",
+  "first_message": "string (min 10 chars)",
+  "voice_id": "string (valid voice_id)",
+  "language": "string (e.g., 'en')",
+  "max_duration_seconds": integer (60-1800),
+  "end_call_after_silence_secs": integer (5-120),
+  "interruption_sensitivity": "low" | "medium" | "high",
+  "enable_backchannel": boolean,
+  "enable_data_collection": boolean,
+  "data_collection_fields": [
+    { "key": "string", "type": "string", "description": "string", "options": ["string"] }
+  ],
+  "tools": ["end_call" | "transfer_call" | "calendar_booking" | "crm_lookup"],
+  "rationale": "string explaining your choices"
+}
+
+IMPORTANT: The "tools" field MUST be a list of strings, for example: ["end_call", "calendar_booking"].
 """
 
 def build_user_prompt(goal: str, workspace_name: str) -> str:
@@ -157,12 +165,12 @@ async def generate_agent_config(
         (config, was_generated) where was_generated=False means we fell
         back to defaults. The caller uses this to set a warning on the campaign.
     """
-    if not settings.gemini_api_key:
-        logger.warning("GEMINI_API_KEY not configured — using default agent config")
+    if not groq_client:
+        logger.warning("GROQ_API_KEY not configured — using default agent config")
         return DEFAULT_CONFIG, False
 
     try:
-        raw = await _call_gemini(goal, workspace_name)
+        raw = await _call_llm(goal, workspace_name)
         config = _parse_and_validate(raw)
         logger.info(f"Agent config generated successfully for goal: {goal[:60]}...")
         return config, True
@@ -174,36 +182,40 @@ async def generate_agent_config(
 
 @retry(
     retry=retry_if_exception_type((
-        google_exceptions.ServiceUnavailable,
-        google_exceptions.DeadlineExceeded,
-        google_exceptions.ResourceExhausted,
+        httpx.RequestError,
+        httpx.HTTPStatusError,
     )),
     stop=stop_after_attempt(3),
     wait=wait_exponential(multiplier=1, min=2, max=10),
     reraise=True,
 )
-async def _call_gemini(goal: str, workspace_name: str) -> str:
+async def _call_llm(goal: str, workspace_name: str) -> str:
     """
-    Makes the actual Gemini API call.
-    Returns the raw text response.
+    Makes the actual Groq API call.
+    Returns the raw JSON string response.
     Raises on any API error.
     """
-    model = genai.GenerativeModel(
-        model_name=settings.gemini_model,
-        system_instruction=SYSTEM_INSTRUCTION,
-        generation_config=GenerationConfig(
-            temperature=0.4,          # low — we want consistent, reliable output
-            response_mime_type="application/json",
-        ),
-    )
+    if not groq_client:
+        raise ValueError("Groq client not initialized")
 
     prompt = build_user_prompt(goal, workspace_name)
-    response = await model.generate_content_async(prompt)
+    
+    response = await groq_client.chat.completions.create(
+        model=settings.groq_model,
+        messages=[
+            {"role": "system", "content": SYSTEM_INSTRUCTION},
+            {"role": "user", "content": prompt},
+        ],
+        temperature=0.4,
+        response_format={"type": "json_object"},
+    )
 
-    if not response.text:
-        raise ValueError("Gemini returned an empty response")
+    content = response.choices[0].message.content
+    logger.info(f"RAW GROQ RESPONSE: {content}")
+    if not content:
+        raise ValueError("Groq returned an empty response")
 
-    return response.text
+    return content
 
 
 def _parse_and_validate(raw: str) -> GeneratedAgentConfig:

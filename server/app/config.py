@@ -18,9 +18,9 @@ class Settings(BaseSettings):
     elevenlabs_api_key: str
     elevenlabs_base_url: str = "https://api.elevenlabs.io/v1"
     elevenlabs_webhook_secret: str = ""
-    gemini_api_key: str = ""
-    gemini_model: str = "gemini-1.5-pro"
-    frontend_url: str = "http://localhost:5173"
+    groq_api_key: str = ""
+    groq_model: str = "llama-3.3-70b-versatile"
+    frontend_url: str = "http://localhost:8080"
 
     # Integrations
     hubspot_client_id: str = ""

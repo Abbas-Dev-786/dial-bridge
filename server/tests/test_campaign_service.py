@@ -47,7 +47,7 @@ async def test_create_campaign_automated(mock_workspace, mock_user, mock_generat
     # Mock DB Session
     mock_db = AsyncMock(spec=AsyncSession)
 
-    # Mock Gemini and Agent Creation
+    # Mock AI and Agent Creation
     with patch("app.services.agent_generation_service.generate_agent_config", new_callable=AsyncMock) as mock_gen:
         mock_gen.return_value = (mock_generated_config, True)
         

@@ -51,7 +51,7 @@ async def create_campaign(
     )
     from app.services.agent_service import create_agent
 
-    # 1. Generate agent config from the campaign goal via Gemini
+    # 1. Generate agent config from the campaign goal via AI
     generated_config, was_generated = await generate_agent_config(
         goal=data.goal_description,
         workspace_name=workspace.name,

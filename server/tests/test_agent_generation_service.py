@@ -8,7 +8,7 @@ from app.services.agent_generation_service import (
     GeneratedAgentConfig,
 )
 
-VALID_GEMINI_RESPONSE = """
+VALID_LLM_RESPONSE = """
 {
   "agent_name": "Demo Booking Agent",
   "system_prompt": "You are a friendly sales assistant for Acme Corp. Your goal is to schedule a 15-minute product demo with trial users who haven't booked one yet. Start by asking if they have had a chance to explore the product. If they are interested, offer to book a demo. If they are not interested, thank them and end the call. Always be respectful and concise.",
@@ -29,19 +29,19 @@ VALID_GEMINI_RESPONSE = """
 }
 """
 
-RESPONSE_WITH_MARKDOWN = f"```json\n{VALID_GEMINI_RESPONSE}\n```"
-RESPONSE_INVALID_VOICE = VALID_GEMINI_RESPONSE.replace(
+RESPONSE_WITH_MARKDOWN = f"```json\n{VALID_LLM_RESPONSE}\n```"
+RESPONSE_INVALID_VOICE = VALID_LLM_RESPONSE.replace(
     '"EXAVITQu4vr4xnSDxMaL"', '"non_existent_voice_id_xyz"'
 )
 # For short prompt test, we need valid JSON but with a short string.
 import json
-_data = json.loads(VALID_GEMINI_RESPONSE)
+_data = json.loads(VALID_LLM_RESPONSE)
 _data["system_prompt"] = "Hi"
 RESPONSE_SHORT_PROMPT = json.dumps(_data)
 
 class TestParseAndValidate:
     def test_valid_response(self):
-        config = _parse_and_validate(VALID_GEMINI_RESPONSE)
+        config = _parse_and_validate(VALID_LLM_RESPONSE)
         assert config.agent_name == "Demo Booking Agent"
         assert "{{contact_name}}" in config.first_message
         assert "end_call" in config.tools
@@ -63,7 +63,7 @@ class TestParseAndValidate:
             _parse_and_validate(RESPONSE_SHORT_PROMPT)
 
     def test_unknown_tool_raises(self):
-        bad = VALID_GEMINI_RESPONSE.replace(
+        bad = VALID_LLM_RESPONSE.replace(
             '"end_call", "calendar_booking"', '"end_call", "send_email"'
         )
         from pydantic import ValidationError
@@ -74,7 +74,7 @@ class TestParseAndValidate:
 class TestBuildAgentCreate:
     def test_tools_are_mapped_correctly(self):
         from app.enums import ToolType
-        config = _parse_and_validate(VALID_GEMINI_RESPONSE)
+        config = _parse_and_validate(VALID_LLM_RESPONSE)
         agent_create = build_agent_create(config, "Q1 Campaign")
         tool_names = [t.name for t in agent_create.tools]
         assert "end_call" in tool_names
@@ -85,17 +85,17 @@ class TestBuildAgentCreate:
         assert calendar.tool_type == ToolType.client
 
     def test_description_includes_campaign_name(self):
-        config = _parse_and_validate(VALID_GEMINI_RESPONSE)
+        config = _parse_and_validate(VALID_LLM_RESPONSE)
         agent_create = build_agent_create(config, "Q1 Campaign")
         assert "Q1 Campaign" in agent_create.description
 
     def test_voice_config_populated(self):
-        config = _parse_and_validate(VALID_GEMINI_RESPONSE)
+        config = _parse_and_validate(VALID_LLM_RESPONSE)
         agent_create = build_agent_create(config, "Test")
         assert agent_create.voice_config.voice_id == "EXAVITQu4vr4xnSDxMaL"
 
     def test_data_collection_fields_passed_through(self):
-        config = _parse_and_validate(VALID_GEMINI_RESPONSE)
+        config = _parse_and_validate(VALID_LLM_RESPONSE)
         agent_create = build_agent_create(config, "Test")
         fields = agent_create.conversation_config.data_collection_fields
         assert fields is not None
@@ -103,11 +103,11 @@ class TestBuildAgentCreate:
 
 
 class TestGenerateAgentConfig:
-    """Integration-level tests — mock the Gemini API call."""
+    """Integration-level tests — mock the LLM API call."""
 
     @pytest.mark.asyncio
     async def test_returns_default_when_no_api_key(self, monkeypatch):
-        monkeypatch.setattr("app.services.agent_generation_service.settings.gemini_api_key", "")
+        monkeypatch.setattr("app.services.agent_generation_service.groq_client", None)
         from app.services.agent_generation_service import generate_agent_config
         config, was_generated = await generate_agent_config("Test goal", "Acme")
         assert was_generated is False
@@ -118,9 +118,9 @@ class TestGenerateAgentConfig:
         async def mock_call(*args, **kwargs):
             raise Exception("API error")
         monkeypatch.setattr(
-            "app.services.agent_generation_service._call_gemini", mock_call
+            "app.services.agent_generation_service._call_llm", mock_call
         )
-        monkeypatch.setattr("app.services.agent_generation_service.settings.gemini_api_key", "fake-key")
+        monkeypatch.setattr("app.services.agent_generation_service.groq_client", "fake-client")
         from app.services.agent_generation_service import generate_agent_config
         config, was_generated = await generate_agent_config("Test goal", "Acme")
         assert was_generated is False
@@ -128,11 +128,11 @@ class TestGenerateAgentConfig:
     @pytest.mark.asyncio
     async def test_returns_generated_config_on_success(self, monkeypatch):
         async def mock_call(*args, **kwargs):
-            return VALID_GEMINI_RESPONSE
+            return VALID_LLM_RESPONSE
         monkeypatch.setattr(
-            "app.services.agent_generation_service._call_gemini", mock_call
+            "app.services.agent_generation_service._call_llm", mock_call
         )
-        monkeypatch.setattr("app.services.agent_generation_service.settings.gemini_api_key", "fake-key")
+        monkeypatch.setattr("app.services.agent_generation_service.groq_client", "fake-client")
         from app.services.agent_generation_service import generate_agent_config
         config, was_generated = await generate_agent_config("Book demos", "Acme")
         assert was_generated is True

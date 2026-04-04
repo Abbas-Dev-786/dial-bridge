@@ -24,34 +24,44 @@ def decrypt_password(encrypted_password: str) -> str:
         return encrypted_password[4:]
     return encrypted_password
 
-async def list_elevenlabs_available_numbers(db: AsyncSession, workspace: Workspace) -> list[ElevenLabsAvailableNumber]:
-    client = await get_elevenlabs_client(workspace)
-    async with client:
+async def list_elevenlabs_available_numbers(db: AsyncSession, workspace_id: UUID) -> list[ElevenLabsAvailableNumber]:
+    from app.services.elevenlabs_client import ElevenLabsClient
+    async with ElevenLabsClient() as client:
         el_numbers = await client.list_phone_numbers()
     
-    # Fetch already imported numbers
-    stmt = select(PhoneNumber.elevenlabs_number_id).where(
-        PhoneNumber.workspace_id == workspace.id,
-        PhoneNumber.provider == PhoneProvider.elevenlabs,
-        PhoneNumber.status != PhoneNumberStatus.released
-    )
-    result = await db.execute(stmt)
-    imported_ids = set(result.scalars().all())
+    # Fetch ALL imported numbers across ALL workspaces
+    all_imported = (await db.execute(
+        select(PhoneNumber.elevenlabs_number_id, PhoneNumber.workspace_id)
+        .where(PhoneNumber.released_at.is_(None))
+    )).all()
+
+    imported_by_this_workspace = {
+        row.elevenlabs_number_id
+        for row in all_imported
+        if row.workspace_id == workspace_id
+    }
+    imported_by_other_workspace = {
+        row.elevenlabs_number_id
+        for row in all_imported
+        if row.workspace_id != workspace_id
+    }
     
     available = []
     for el in el_numbers:
+        el_id = el["phone_number_id"]
         available.append(ElevenLabsAvailableNumber(
-            elevenlabs_number_id=el["phone_number_id"],
+            elevenlabs_number_id=el_id,
             number=el["phone_number"],
             label=el.get("label"),
             assigned_agent_id=el.get("assigned_agent"),
-            is_imported=el["phone_number_id"] in imported_ids
+            is_imported=el_id in imported_by_this_workspace,
+            is_unavailable=el_id in imported_by_other_workspace
         ))
     return available
 
 async def import_from_elevenlabs(db: AsyncSession, workspace: Workspace, data: PhoneNumberImportFromEL) -> PhoneNumber:
-    client = await get_elevenlabs_client(workspace)
-    async with client:
+    from app.services.elevenlabs_client import ElevenLabsClient
+    async with ElevenLabsClient() as client:
         el_data = await client.get_phone_number(data.elevenlabs_number_id)
     
     # Check if already imported
@@ -153,8 +163,8 @@ async def release_phone_number(db: AsyncSession, phone_number: PhoneNumber) -> N
     await db.commit()
 
 async def sync_from_elevenlabs(db: AsyncSession, workspace: Workspace) -> int:
-    client = await get_elevenlabs_client(workspace)
-    async with client:
+    from app.services.elevenlabs_client import ElevenLabsClient
+    async with ElevenLabsClient() as client:
         el_numbers = await client.list_phone_numbers()
     
     el_map = {el["phone_number_id"]: el for el in el_numbers}

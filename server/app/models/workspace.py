@@ -13,8 +13,6 @@ class Workspace(AppBase):
     logo_url: Mapped[str | None] = mapped_column(String)
     timezone: Mapped[str] = mapped_column(String, default="UTC")
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    elevenlabs_api_key_enc: Mapped[str | None] = mapped_column(String)
-    elevenlabs_webhook_secret_enc: Mapped[str | None] = mapped_column(String)
 
     # relationships
     members: Mapped[list["WorkspaceMember"]] = relationship(

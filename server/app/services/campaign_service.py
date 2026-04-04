@@ -236,17 +236,18 @@ async def transition_status(db: AsyncSession, campaign: Campaign, new_status: Ca
             raise ConflictError(f"{agent.name} is already active in campaign '{blocking_campaign.name}'")
             
         if campaign.kb_sync_status != KBSyncStatus.synced:
-            await kb_service.sync_campaign_kb(db, campaign, workspace)
+            await kb_service.sync_campaign_kb(db, campaign)
             
         result = await db.execute(select(PhoneNumber).where(PhoneNumber.id == campaign.phone_number_id))
         phone = result.scalar_one_or_none()
         
-        client = await get_elevenlabs_client(workspace)
+        from app.services.elevenlabs_client import ElevenLabsClient
         try:
-            await client.assign_phone_to_agent(
-                phone.elevenlabs_number_id, 
-                agent.elevenlabs_agent_id
-            )
+            async with ElevenLabsClient() as client:
+                await client.assign_phone_to_agent(
+                    phone.elevenlabs_number_id, 
+                    agent.elevenlabs_agent_id
+                )
         except Exception as e:
             raise ElevenLabsError(str(e))
             
@@ -277,11 +278,12 @@ async def transition_status(db: AsyncSession, campaign: Campaign, new_status: Ca
         result = await db.execute(select(PhoneNumber).where(PhoneNumber.id == campaign.phone_number_id))
         phone = result.scalar_one_or_none()
         if phone:
-            client = await get_elevenlabs_client(workspace)
-            try:
-                await client.unassign_phone_from_agent(phone.elevenlabs_number_id)
-            except Exception:
-                pass
+            from app.services.elevenlabs_client import ElevenLabsClient
+            async with ElevenLabsClient() as client:
+                try:
+                    await client.unassign_phone_from_agent(phone.elevenlabs_number_id)
+                except Exception:
+                    pass
 
     elif new_status == CampaignStatus.completed:
         _stop_feeder(campaign)
@@ -291,11 +293,12 @@ async def transition_status(db: AsyncSession, campaign: Campaign, new_status: Ca
         result = await db.execute(select(PhoneNumber).where(PhoneNumber.id == campaign.phone_number_id))
         phone = result.scalar_one_or_none()
         if phone:
-            client = await get_elevenlabs_client(workspace)
-            try:
-                await client.unassign_phone_from_agent(phone.elevenlabs_number_id)
-            except Exception:
-                pass
+            from app.services.elevenlabs_client import ElevenLabsClient
+            async with ElevenLabsClient() as client:
+                try:
+                    await client.unassign_phone_from_agent(phone.elevenlabs_number_id)
+                except Exception:
+                    pass
 
     elif new_status == CampaignStatus.scheduled:
         if not campaign.agent_id:
@@ -376,11 +379,12 @@ async def delete_campaign(db: AsyncSession, campaign: Campaign, workspace: Works
         result = await db.execute(select(PhoneNumber).where(PhoneNumber.id == campaign.phone_number_id))
         phone = result.scalar_one_or_none()
         if phone:
-            client = await get_elevenlabs_client(workspace)
-            try:
-                await client.unassign_phone_from_agent(phone.elevenlabs_number_id)
-            except Exception:
-                pass
+            from app.services.elevenlabs_client import ElevenLabsClient
+            async with ElevenLabsClient() as client:
+                try:
+                    await client.unassign_phone_from_agent(phone.elevenlabs_number_id)
+                except Exception:
+                    pass
                 
     campaign.deleted_at = datetime.now()
     campaign.status = CampaignStatus.archived

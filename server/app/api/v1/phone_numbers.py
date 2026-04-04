@@ -32,7 +32,7 @@ async def list_available_elevenlabs_numbers(
     member: WorkspaceMember = Depends(get_workspace_member),
 ):
     """List phone numbers available on the ElevenLabs account for import."""
-    return await phone_number_service.list_elevenlabs_available_numbers(db, member.workspace)
+    return await phone_number_service.list_elevenlabs_available_numbers(db, workspace_id)
 
 @router.post("/{workspace_id}/phone-numbers/import-elevenlabs", response_model=PhoneNumberResponse, status_code=status.HTTP_201_CREATED)
 async def import_from_elevenlabs(

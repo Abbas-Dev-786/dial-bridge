@@ -38,6 +38,7 @@ async def delete_workspace(workspace_id: UUID, member: WorkspaceMember = Depends
     workspace = await workspace_service.get_workspace(db, workspace_id)
     from datetime import datetime
     workspace.deleted_at = datetime.utcnow()
+    await db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 # Member management
@@ -69,3 +70,16 @@ async def update_member_role(workspace_id: UUID, user_id: UUID, data: UpdateMemb
 @router.post("/invitations/accept/{token}", response_model=MemberResponse)
 async def accept_invitation(token: str, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     return await workspace_service.accept_invitation(db, token, current_user)
+
+@router.get("/{workspace_id}/settings/elevenlabs-status")
+async def get_elevenlabs_status(workspace_id: UUID, member: WorkspaceMember = Depends(get_workspace_member)):
+    """
+    Returns platform-level ElevenLabs status. 
+    Since keys are now platform-wide, this just confirms the platform key is active.
+    """
+    from app.config import settings
+    return {
+        "is_configured": bool(settings.elevenlabs_api_key),
+        "api_base_url": settings.elevenlabs_base_url,
+        "uses_platform_account": True
+    }

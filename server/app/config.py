@@ -15,7 +15,9 @@ class Settings(BaseSettings):
     access_token_expire_minutes: int = 60
     refresh_token_expire_days: int = 30
 
-    elevenlabs_platform_api_key: str = ""
+    elevenlabs_api_key: str
+    elevenlabs_base_url: str = "https://api.elevenlabs.io/v1"
+    elevenlabs_webhook_secret: str = ""
     gemini_api_key: str = ""
     gemini_model: str = "gemini-1.5-pro"
     frontend_url: str = "http://localhost:5173"

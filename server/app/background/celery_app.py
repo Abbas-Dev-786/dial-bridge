@@ -11,6 +11,7 @@ celery_app = Celery(
         "app.background.kb_sync",
         "app.background.stats",
         "app.background.outgoing_webhooks",
+        "app.background.cleanup",
     ],
 )
 
@@ -51,5 +52,10 @@ celery_app.conf.beat_schedule = {
     "nightly-stats": {
         "task": "app.background.stats.reconcile_yesterday_stats",
         "schedule": crontab(hour=1, minute=0),
+    },
+    # Nightly ElevenLabs cleanup at 02:00 UTC
+    "nightly-cleanup": {
+        "task": "app.background.cleanup.cleanup_deleted_workspace_resources",
+        "schedule": crontab(hour=2, minute=0),
     },
 }

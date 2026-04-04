@@ -183,38 +183,39 @@ async def dispatch_call(self, campaign_id: str, contact_id: str):
 
         # Initiate ElevenLabs call
         try:
-            client = await get_elevenlabs_client(campaign.workspace)
-            # Create Call row
-            call = Call(
-                workspace_id=campaign.workspace_id,
-                campaign_id=campaign.id,
-                agent_id=campaign.agent_id,
-                contact_id=contact.id,
-                phone_number_id=campaign.phone_number_id,
-                direction=CallDirection.outbound,
-                from_number=campaign.phone_number.number if campaign.phone_number else "",
-                to_number=contact.phone,
-                status=CallStatus.queued,
-                retry_number=contact.retry_count or 0,
-            )
-            db.add(call)
-            await db.flush()
+            from app.services.elevenlabs_client import ElevenLabsClient
+            async with ElevenLabsClient() as client:
+                # Create Call row
+                call = Call(
+                    workspace_id=campaign.workspace_id,
+                    campaign_id=campaign.id,
+                    agent_id=campaign.agent_id,
+                    contact_id=contact.id,
+                    phone_number_id=campaign.phone_number_id,
+                    direction=CallDirection.outbound,
+                    from_number=campaign.phone_number.number if campaign.phone_number else "",
+                    to_number=contact.phone,
+                    status=CallStatus.queued,
+                    retry_number=contact.retry_count or 0,
+                )
+                db.add(call)
+                await db.flush()
 
-            payload = {
-                "agent_id": campaign.agent.elevenlabs_agent_id,
-                "agent_phone_number_id": campaign.phone_number.elevenlabs_number_id,
-                "to_number": contact.phone,
-                "conversation_initiation_client_data": {
-                    "dynamic_variables": dynamic_vars
+                payload = {
+                    "agent_id": campaign.agent.elevenlabs_agent_id,
+                    "agent_phone_number_id": campaign.phone_number.elevenlabs_number_id,
+                    "to_number": contact.phone,
+                    "conversation_initiation_client_data": {
+                        "dynamic_variables": dynamic_vars
+                    }
                 }
-            }
-            if campaign.record_calls:
-                payload["conversation_initiation_client_data"]["recording"] = {"enabled": True}
+                if campaign.record_calls:
+                    payload["conversation_initiation_client_data"]["recording"] = {"enabled": True}
 
-            response = await client.initiate_call(payload)
-            call.elevenlabs_conversation_id = response.get("conversation_id")
-            call.status = CallStatus.ringing
-            contact.last_called_at = datetime.utcnow()
+                response = await client.initiate_call(payload)
+                call.elevenlabs_conversation_id = response.get("conversation_id")
+                call.status = CallStatus.ringing
+                contact.last_called_at = datetime.utcnow()
             
         except Exception as e:
             logger.error(f"Failed to initiate call for {contact.id}: {e}")
@@ -284,8 +285,6 @@ def _is_within_schedule(campaign: Campaign) -> bool:
 async def _auto_complete_campaign(db, campaign: Campaign):
     """Transition campaign to completed status."""
     from app.services.campaign_service import transition_status
-    from app.models.workspace import Workspace
     
-    workspace = await db.get(Workspace, campaign.workspace_id)
-    await transition_status(db, campaign, CampaignStatus.completed, workspace)
+    await transition_status(db, campaign, CampaignStatus.completed)
     await db.commit()

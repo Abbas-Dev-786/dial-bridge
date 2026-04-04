@@ -5,11 +5,12 @@ from app.exceptions import ElevenLabsError, ValidationError
 ELEVENLABS_BASE_URL = "https://api.elevenlabs.io/v1"
 
 class ElevenLabsClient:
-    def __init__(self, api_key: str):
+    def __init__(self):
+        # Always uses the platform key from settings
         self._client = httpx.AsyncClient(
-            base_url=ELEVENLABS_BASE_URL,
+            base_url=settings.elevenlabs_base_url,
             headers={
-                "xi-api-key": api_key,
+                "xi-api-key": settings.elevenlabs_api_key,
                 "Content-Type": "application/json",
             },
             timeout=30.0,
@@ -160,17 +161,9 @@ class ElevenLabsClient:
         return await self._request("POST", "/convai/twilio/outbound-call", json=payload)
 
 
-async def get_elevenlabs_client(workspace) -> ElevenLabsClient:
+def get_elevenlabs_client() -> ElevenLabsClient:
     """
-    Helper to instantiate the client from a workspace object.
-    The workspace must have elevenlabs_api_key_enc set.
-    Raises ValidationError if no API key is configured.
+    Returns an ElevenLabs client using the platform-level configuration.
+    No workspace argument is needed as all workspaces share the same account.
     """
-    if not workspace.elevenlabs_api_key_enc:
-        raise ValidationError(
-            "No ElevenLabs API key configured for this workspace. "
-            "Add your API key in workspace settings."
-        )
-    # In production, decrypt the key here before using it.
-    # For now, treat it as plain text during development.
-    return ElevenLabsClient(api_key=workspace.elevenlabs_api_key_enc)
+    return ElevenLabsClient()

@@ -152,6 +152,6 @@ async def list_available_voices(
     member: WorkspaceMember = Depends(get_workspace_member),
 ):
     """List all available ElevenLabs voices for this workspace."""
-    client = await get_elevenlabs_client(member.workspace)
-    async with client:
+    from app.services.elevenlabs_client import ElevenLabsClient
+    async with ElevenLabsClient() as client:
         return await client.list_voices()

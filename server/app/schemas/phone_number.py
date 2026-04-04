@@ -56,3 +56,4 @@ class ElevenLabsAvailableNumber(BaseModel):
     label: str | None = None
     assigned_agent_id: str | None = None
     is_imported: bool = False   # True if already in our DB
+    is_unavailable: bool = False # True if imported by a DIFFERENT workspace

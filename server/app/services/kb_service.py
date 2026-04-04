@@ -51,7 +51,6 @@ async def add_url_document(
 async def add_file_document(
     db: AsyncSession, 
     campaign: Campaign, 
-    workspace: Workspace,
     user_id: uuid.UUID, 
     file_bytes: bytes, 
     filename: str, 
@@ -80,21 +79,22 @@ async def add_file_document(
     await db.flush() # Get doc ID
     
     # 2. Immediately upload to EL
-    client = await get_elevenlabs_client(workspace)
-    try:
-        response = await client.add_file_to_kb(
-            agent.elevenlabs_agent_id, 
-            file_bytes, 
-            filename
-        )
-        # 3. Store the returned elevenlabs_kb_id
-        doc.elevenlabs_kb_id = response.get("id")
-        doc.status = DocStatus.ready
-        doc.last_synced_at = datetime.now()
-    except Exception as e:
-        doc.status = DocStatus.failed
-        doc.error_message = str(e)
-        raise ElevenLabsError(f"Failed to upload file to ElevenLabs: {str(e)}")
+    from app.services.elevenlabs_client import ElevenLabsClient
+    async with ElevenLabsClient() as client:
+        try:
+            response = await client.add_file_to_kb(
+                agent.elevenlabs_agent_id, 
+                file_bytes, 
+                filename
+            )
+            # 3. Store the returned elevenlabs_kb_id
+            doc.elevenlabs_kb_id = response.get("id")
+            doc.status = DocStatus.ready
+            doc.last_synced_at = datetime.now()
+        except Exception as e:
+            doc.status = DocStatus.failed
+            doc.error_message = str(e)
+            raise ElevenLabsError(f"Failed to upload file to ElevenLabs: {str(e)}")
     
     # 4. Set campaign.kb_sync_status = pending (since we might have other pending items)
     campaign.kb_sync_status = KBSyncStatus.pending
@@ -107,7 +107,6 @@ async def add_file_document(
 async def delete_document(
     db: AsyncSession, 
     campaign: Campaign, 
-    workspace: Workspace,
     doc_id: uuid.UUID
 ) -> None:
     # 1. Fetch document
@@ -133,12 +132,13 @@ async def delete_document(
         result = await db.execute(select(Agent).where(Agent.id == campaign.agent_id))
         agent = result.scalar_one_or_none()
         if agent and agent.elevenlabs_agent_id:
-            client = await get_elevenlabs_client(workspace)
-            try:
-                await client.delete_kb_document(agent.elevenlabs_agent_id, doc.elevenlabs_kb_id)
-            except Exception:
-                # We log but continue, the sync algorithm should clean up orphans anyway
-                pass
+            from app.services.elevenlabs_client import ElevenLabsClient
+            async with ElevenLabsClient() as client:
+                try:
+                    await client.delete_kb_document(agent.elevenlabs_agent_id, doc.elevenlabs_kb_id)
+                except Exception:
+                    # We log but continue, the sync algorithm should clean up orphans anyway
+                    pass
     
     # 4. Soft-delete
     doc.deleted_at = datetime.now()
@@ -148,7 +148,7 @@ async def delete_document(
     db.add(campaign)
     await db.commit()
 
-async def sync_campaign_kb(db: AsyncSession, campaign: Campaign, workspace: Workspace) -> None:
+async def sync_campaign_kb(db: AsyncSession, campaign: Campaign) -> None:
     """
     Core sync function to reconcile local knowledge base with ElevenLabs.
     """
@@ -161,78 +161,78 @@ async def sync_campaign_kb(db: AsyncSession, campaign: Campaign, workspace: Work
     if not agent or not agent.elevenlabs_agent_id:
         raise ElevenLabsError("Campaign agent is not configured on ElevenLabs.")
 
-    # 2. Set campaign.kb_sync_status = syncing
     campaign.kb_sync_status = KBSyncStatus.syncing
     await db.commit()
 
-    client = await get_elevenlabs_client(workspace)
-    try:
-        # 3. Fetch current EL KB docs for this agent
-        el_docs = await client.list_kb_documents(agent.elevenlabs_agent_id)
-        el_doc_ids = {d["id"] for d in el_docs}
+    from app.services.elevenlabs_client import ElevenLabsClient
+    async with ElevenLabsClient() as client:
+        try:
+            # 3. Fetch current EL KB docs for this agent
+            el_docs = await client.list_kb_documents(agent.elevenlabs_agent_id)
+            el_doc_ids = {d["id"] for d in el_docs}
 
-        # 4. Fetch our campaign's KB docs (non-deleted)
-        result = await db.execute(
-            select(KnowledgeDocument).where(
-                and_(
-                    KnowledgeDocument.campaign_id == campaign.id,
-                    KnowledgeDocument.deleted_at.is_(None)
+            # 4. Fetch our campaign's KB docs (non-deleted)
+            result = await db.execute(
+                select(KnowledgeDocument).where(
+                    and_(
+                        KnowledgeDocument.campaign_id == campaign.id,
+                        KnowledgeDocument.deleted_at.is_(None)
+                    )
                 )
             )
-        )
-        our_docs = result.scalars().all()
-        our_el_ids = {d.elevenlabs_kb_id for d in our_docs if d.elevenlabs_kb_id}
+            our_docs = result.scalars().all()
+            our_el_ids = {d.elevenlabs_kb_id for d in our_docs if d.elevenlabs_kb_id}
 
-        # 5. Delete from EL any docs not in our campaign
-        to_delete = el_doc_ids - our_el_ids
-        for el_id in to_delete:
-            try:
-                await client.delete_kb_document(agent.elevenlabs_agent_id, el_id)
-            except Exception:
-                pass # Non-fatal
-
-        # 6. Upload docs that don't have an elevenlabs_kb_id yet (URLs)
-        any_failed = False
-        for doc in our_docs:
-            if doc.elevenlabs_kb_id is None:
+            # 5. Delete from EL any docs not in our campaign
+            to_delete = el_doc_ids - our_el_ids
+            for el_id in to_delete:
                 try:
-                    if doc.doc_type == DocType.url_scrape:
-                        response = await client.add_url_to_kb(
-                            agent.elevenlabs_agent_id, 
-                            doc.source_url, 
-                            doc.name
-                        )
-                        doc.elevenlabs_kb_id = response.get("id")
-                        doc.status = DocStatus.ready
-                        doc.last_synced_at = datetime.now()
-                    else:
-                        # File docs should have been uploaded at add time.
-                        # If somehow missing here, we mark as failed.
+                    await client.delete_kb_document(agent.elevenlabs_agent_id, el_id)
+                except Exception:
+                    pass # Non-fatal
+
+            # 6. Upload docs that don't have an elevenlabs_kb_id yet (URLs)
+            any_failed = False
+            for doc in our_docs:
+                if doc.elevenlabs_kb_id is None:
+                    try:
+                        if doc.doc_type == DocType.url_scrape:
+                            response = await client.add_url_to_kb(
+                                agent.elevenlabs_agent_id, 
+                                doc.source_url, 
+                                doc.name
+                            )
+                            doc.elevenlabs_kb_id = response.get("id")
+                            doc.status = DocStatus.ready
+                            doc.last_synced_at = datetime.now()
+                        else:
+                            # File docs should have been uploaded at add time.
+                            # If somehow missing here, we mark as failed.
+                            doc.status = DocStatus.failed
+                            doc.error_message = "File content missing for synchronization."
+                            any_failed = True
+                    except Exception as e:
                         doc.status = DocStatus.failed
-                        doc.error_message = "File content missing for synchronization."
+                        doc.error_message = str(e)
                         any_failed = True
-                except Exception as e:
-                    doc.status = DocStatus.failed
-                    doc.error_message = str(e)
-                    any_failed = True
-            
-            db.add(doc)
+                
+                db.add(doc)
 
-        # 7. Finalize status
-        if any_failed:
-            campaign.kb_sync_status = KBSyncStatus.failed
-            raise ElevenLabsError("KB sync failed for one or more documents.")
-        else:
-            campaign.kb_sync_status = KBSyncStatus.synced
-            campaign.kb_last_synced_at = datetime.now()
+            # 7. Finalize status
+            if any_failed:
+                campaign.kb_sync_status = KBSyncStatus.failed
+                raise ElevenLabsError("KB sync failed for one or more documents.")
+            else:
+                campaign.kb_sync_status = KBSyncStatus.synced
+                campaign.kb_last_synced_at = datetime.now()
 
-    except Exception as e:
-        if campaign.kb_sync_status != KBSyncStatus.failed:
-            campaign.kb_sync_status = KBSyncStatus.failed
-        raise e
-    finally:
-        db.add(campaign)
-        await db.commit()
+        except Exception as e:
+            if campaign.kb_sync_status != KBSyncStatus.failed:
+                campaign.kb_sync_status = KBSyncStatus.failed
+            raise e
+        finally:
+            db.add(campaign)
+            await db.commit()
 
 async def list_documents(db: AsyncSession, campaign_id: uuid.UUID) -> list[KnowledgeDocument]:
     result = await db.execute(

@@ -17,13 +17,14 @@ def build_elevenlabs_agent_payload(
     voice_config: AgentVoiceConfig,
     conversation_config: AgentConversationConfig,
     tools: list[AgentTool],
+    workspace_id: UUID,
 ) -> dict:
     """
     Builds the JSON payload for ElevenLabs POST/PATCH /convai/agents.
     Reference: https://elevenlabs.io/docs/conversational-ai/api-reference
     """
     payload = {
-        "name": agent.name,
+        "name": f"[{str(workspace_id)[:8]}] {agent.name}",
         "conversation_config": {
             "agent": {
                 "prompt": {
@@ -143,11 +144,14 @@ async def create_agent(db: AsyncSession, workspace: Workspace, user: User, data:
     await db.refresh(agent, ["voice_config", "conversation_config", "tools"])
 
     # 5. Build ElevenLabs payload & Call
-    client = await get_elevenlabs_client(workspace)
-    payload = build_elevenlabs_agent_payload(agent, agent.voice_config, agent.conversation_config, agent.tools)
+    payload = build_elevenlabs_agent_payload(
+        agent, agent.voice_config, agent.conversation_config, agent.tools,
+        workspace_id=workspace.id
+    )
     
     try:
-        async with client:
+        from app.services.elevenlabs_client import ElevenLabsClient
+        async with ElevenLabsClient() as client:
             resp = await client.create_agent(payload)
             agent.elevenlabs_agent_id = resp["agent_id"]
             agent.status = AgentStatus.live
@@ -207,10 +211,13 @@ async def update_agent(db: AsyncSession, workspace: Workspace, agent: Agent, dat
     await db.flush()
     
     # Sync to ElevenLabs
-    client = await get_elevenlabs_client(workspace)
-    payload = build_elevenlabs_agent_payload(agent, agent.voice_config, agent.conversation_config, agent.tools)
+    payload = build_elevenlabs_agent_payload(
+        agent, agent.voice_config, agent.conversation_config, agent.tools,
+        workspace_id=workspace.id
+    )
     
-    async with client:
+    from app.services.elevenlabs_client import ElevenLabsClient
+    async with ElevenLabsClient() as client:
         await client.update_agent(agent.elevenlabs_agent_id, payload)
     
     await log_action(
@@ -231,10 +238,13 @@ async def update_voice_config(db: AsyncSession, workspace: Workspace, agent: Age
     await db.flush()
     
     # Sync to ElevenLabs
-    client = await get_elevenlabs_client(workspace)
-    payload = build_elevenlabs_agent_payload(agent, agent.voice_config, agent.conversation_config, agent.tools)
+    payload = build_elevenlabs_agent_payload(
+        agent, agent.voice_config, agent.conversation_config, agent.tools,
+        workspace_id=workspace.id
+    )
     
-    async with client:
+    from app.services.elevenlabs_client import ElevenLabsClient
+    async with ElevenLabsClient() as client:
         await client.update_agent(agent.elevenlabs_agent_id, payload)
     
     await db.commit()
@@ -251,10 +261,13 @@ async def update_conversation_config(db: AsyncSession, workspace: Workspace, age
     await db.flush()
     
     # Sync to ElevenLabs
-    client = await get_elevenlabs_client(workspace)
-    payload = build_elevenlabs_agent_payload(agent, agent.voice_config, agent.conversation_config, agent.tools)
+    payload = build_elevenlabs_agent_payload(
+        agent, agent.voice_config, agent.conversation_config, agent.tools,
+        workspace_id=workspace.id
+    )
     
-    async with client:
+    from app.services.elevenlabs_client import ElevenLabsClient
+    async with ElevenLabsClient() as client:
         await client.update_agent(agent.elevenlabs_agent_id, payload)
     
     await db.commit()
@@ -274,10 +287,13 @@ async def add_tool(db: AsyncSession, workspace: Workspace, agent: Agent, data: A
     await db.refresh(agent, ["tools"])
     
     # Sync to ElevenLabs
-    client = await get_elevenlabs_client(workspace)
-    payload = build_elevenlabs_agent_payload(agent, agent.voice_config, agent.conversation_config, agent.tools)
+    payload = build_elevenlabs_agent_payload(
+        agent, agent.voice_config, agent.conversation_config, agent.tools,
+        workspace_id=workspace.id
+    )
     
-    async with client:
+    from app.services.elevenlabs_client import ElevenLabsClient
+    async with ElevenLabsClient() as client:
         await client.update_agent(agent.elevenlabs_agent_id, payload)
     
     await db.commit()
@@ -299,10 +315,13 @@ async def update_tool(db: AsyncSession, workspace: Workspace, agent: Agent, tool
     await db.flush()
     
     # Sync to ElevenLabs
-    client = await get_elevenlabs_client(workspace)
-    payload = build_elevenlabs_agent_payload(agent, agent.voice_config, agent.conversation_config, agent.tools)
+    payload = build_elevenlabs_agent_payload(
+        agent, agent.voice_config, agent.conversation_config, agent.tools,
+        workspace_id=workspace.id
+    )
     
-    async with client:
+    from app.services.elevenlabs_client import ElevenLabsClient
+    async with ElevenLabsClient() as client:
         await client.update_agent(agent.elevenlabs_agent_id, payload)
     
     await db.commit()
@@ -323,10 +342,13 @@ async def delete_tool(db: AsyncSession, workspace: Workspace, agent: Agent, tool
     await db.refresh(agent, ["tools"])
     
     # Sync to ElevenLabs
-    client = await get_elevenlabs_client(workspace)
-    payload = build_elevenlabs_agent_payload(agent, agent.voice_config, agent.conversation_config, agent.tools)
+    payload = build_elevenlabs_agent_payload(
+        agent, agent.voice_config, agent.conversation_config, agent.tools,
+        workspace_id=workspace.id
+    )
     
-    async with client:
+    from app.services.elevenlabs_client import ElevenLabsClient
+    async with ElevenLabsClient() as client:
         await client.update_agent(agent.elevenlabs_agent_id, payload)
     
     await db.commit()
@@ -339,9 +361,9 @@ async def delete_agent(db: AsyncSession, workspace: Workspace, agent: Agent) -> 
     agent.deleted_at = datetime.utcnow()
     
     if agent.elevenlabs_agent_id:
-        client = await get_elevenlabs_client(workspace)
+        from app.services.elevenlabs_client import ElevenLabsClient
         try:
-            async with client:
+            async with ElevenLabsClient() as client:
                 await client.delete_agent(agent.elevenlabs_agent_id)
         except Exception:
             # We still delete locally even if EL delete fails (e.g. already deleted in EL)

@@ -22,6 +22,14 @@ app.add_middleware(
 app.include_router(webhook_router)
 app.include_router(v1_router, prefix="/api/v1")
 
+@app.on_event("startup")
+async def validate_config():
+    if not settings.elevenlabs_api_key:
+        raise RuntimeError(
+            "ELEVENLABS_API_KEY is not set. "
+            "The platform cannot start without a valid ElevenLabs API key."
+        )
+
 @app.get("/health")
 async def health():
     return {"status": "ok"}

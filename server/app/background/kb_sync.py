@@ -1,7 +1,7 @@
 import asyncio
 import logging
 from uuid import UUID
-from sqlalchemy import select
+from sqlalchemy import select, and_
 from app.background.celery_app import celery_app
 from app.background.utils import async_task
 from app.database import AsyncSessionLocal
@@ -43,9 +43,8 @@ async def sync_campaign_kb_task(campaign_id: str):
         if not campaign or campaign.status != CampaignStatus.live:
             return
             
-        workspace = await db.get(Workspace, campaign.workspace_id)
         try:
-            await sync_campaign_kb(db, campaign, workspace)
+            await sync_campaign_kb(db, campaign)
             await db.commit()
             logger.info(f"KB sync successful for campaign {campaign_id}")
         except Exception as e:

@@ -33,49 +33,53 @@ import SettingsNotifications from "@/pages/SettingsNotifications";
 import NotFound from "@/pages/NotFound";
 import LandingPage from "@/pages/LandingPage";
 
+import { AuthProvider } from "@/components/AuthProvider";
+
 const queryClient = new QueryClient();
 
 const App = () => (
   <ThemeProvider attribute="class" defaultTheme="light" enableSystem>
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
-        <Toaster />
-        <Sonner />
-        <BrowserRouter>
-          <Routes>
-            {/* Public */}
-            <Route path="/" element={<LandingPage />} />
-            <Route path="/login" element={<Login />} />
-            <Route path="/signup" element={<SignUp />} />
-            <Route path="/forgot-password" element={<ForgotPassword />} />
+        <AuthProvider>
+          <Toaster />
+          <Sonner />
+          <BrowserRouter>
+            <Routes>
+              {/* Public */}
+              <Route path="/" element={<LandingPage />} />
+              <Route path="/login" element={<Login />} />
+              <Route path="/signup" element={<SignUp />} />
+              <Route path="/forgot-password" element={<ForgotPassword />} />
 
-            {/* Dashboard */}
-            <Route element={<DashboardLayout />}>
-              <Route path="/dashboard" element={<Dashboard />} />
-              <Route path="/analytics" element={<Analytics />} />
-              <Route path="/agents" element={<AgentsList />} />
-              <Route path="/agents/new" element={<CreateAgent />} />
-              <Route path="/agents/:id" element={<AgentDetail />} />
-              
-              <Route path="/campaigns" element={<CampaignsList />} />
-              <Route path="/campaigns/:id" element={<CampaignDetail />} />
-              <Route path="/calls" element={<CallLogs />} />
-              <Route path="/calls/:id" element={<CallDetail />} />
-              <Route path="/phone-numbers" element={<PhoneNumbers />} />
-              <Route path="/knowledge" element={<KnowledgeBase />} />
-              <Route path="/integrations" element={<Integrations />} />
-              <Route path="/integrations/webhooks" element={<WebhookLogs />} />
-              <Route path="/settings" element={<GeneralSettings />} />
-              <Route path="/settings/team" element={<SettingsTeam />} />
-              <Route path="/settings/billing" element={<SettingsBilling />} />
-              <Route path="/settings/api" element={<SettingsAPI />} />
-              <Route path="/settings/notifications" element={<SettingsNotifications />} />
-              <Route path="/settings/audit-logs" element={<AuditLogs />} />
-            </Route>
+              {/* Dashboard */}
+              <Route element={<DashboardLayout />}>
+                <Route path="/dashboard" element={<Dashboard />} />
+                <Route path="/analytics" element={<Analytics />} />
+                <Route path="/agents" element={<AgentsList />} />
+                <Route path="/agents/new" element={<CreateAgent />} />
+                <Route path="/agents/:id" element={<AgentDetail />} />
+                
+                <Route path="/campaigns" element={<CampaignsList />} />
+                <Route path="/campaigns/:id" element={<CampaignDetail />} />
+                <Route path="/calls" element={<CallLogs />} />
+                <Route path="/calls/:id" element={<CallDetail />} />
+                <Route path="/phone-numbers" element={<PhoneNumbers />} />
+                <Route path="/knowledge" element={<KnowledgeBase />} />
+                <Route path="/integrations" element={<Integrations />} />
+                <Route path="/integrations/webhooks" element={<WebhookLogs />} />
+                <Route path="/settings" element={<GeneralSettings />} />
+                <Route path="/settings/team" element={<SettingsTeam />} />
+                <Route path="/settings/billing" element={<SettingsBilling />} />
+                <Route path="/settings/api" element={<SettingsAPI />} />
+                <Route path="/settings/notifications" element={<SettingsNotifications />} />
+                <Route path="/settings/audit-logs" element={<AuditLogs />} />
+              </Route>
 
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </BrowserRouter>
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </BrowserRouter>
+        </AuthProvider>
       </TooltipProvider>
     </QueryClientProvider>
   </ThemeProvider>

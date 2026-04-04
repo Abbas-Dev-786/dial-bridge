@@ -5,14 +5,26 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Phone } from "lucide-react";
+import { useAuthStore } from "@/store/useAuthStore";
+import api from "@/lib/api";
 
 export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const navigate = useNavigate();
 
-  const handleLoginBtnClick = () => {
-    navigate("/dashboard");
+  const { login } = useAuthStore();
+
+  const handleLoginBtnClick = async () => {
+    try {
+      const response = await api.post("/api/v1/auth/login", { email, password });
+      const { access_token, user } = response.data;
+      login(access_token, user);
+      navigate("/dashboard");
+    } catch (error) {
+      console.error("Login failed:", error);
+      // You might want to show a toast here
+    }
   };
 
   return (

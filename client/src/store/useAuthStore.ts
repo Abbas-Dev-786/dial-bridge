@@ -20,6 +20,7 @@ interface AuthState {
   login: (token: string, refresh_token: string, user: User) => void;
   logout: () => void;
   fetchMe: () => Promise<void>;
+  refreshTokens: () => Promise<string | null>;
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -46,6 +47,30 @@ export const useAuthStore = create<AuthState>()(
         } catch (error) {
           console.error("Failed to fetch user:", error);
           get().logout();
+        }
+      },
+      refreshTokens: async () => {
+        const refreshToken = get().refresh_token;
+        if (!refreshToken) return null;
+
+        try {
+          // Use a fresh axios instance or non-intercepted request if needed, 
+          // but here we can just use the base api since it doesn't have 401 interceptor loop yet.
+          const response = await api.post("/api/v1/auth/refresh", {
+            refresh_token: refreshToken,
+          });
+
+          const { access_token, refresh_token: newRefreshToken } = response.data;
+          set({ 
+            token: access_token, 
+            refresh_token: newRefreshToken, 
+            isAuthenticated: true 
+          });
+          return access_token;
+        } catch (error) {
+          console.error("Token refresh failed:", error);
+          get().logout();
+          return null;
         }
       },
     }),

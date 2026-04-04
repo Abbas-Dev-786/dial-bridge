@@ -17,7 +17,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     setupInterceptors(
       () => useAuthStore.getState().token,
       () => useWorkspaceStore.getState().activeWorkspaceId,
-      () => useAuthStore.getState().logout()
+      () => useAuthStore.getState().logout(),
+      () => useAuthStore.getState().refreshTokens()
     );
 
     const initializeAuth = async () => {

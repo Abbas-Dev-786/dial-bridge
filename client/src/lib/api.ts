@@ -7,12 +7,31 @@ const api = axios.create({
   },
 });
 
+let isRefreshing = false;
+let failedQueue: any[] = [];
+
+const processQueue = (error: any, token: string | null = null) => {
+  failedQueue.forEach((prom) => {
+    if (error) {
+      prom.reject(error);
+    } else {
+      prom.resolve(token);
+    }
+  });
+  failedQueue = [];
+};
+
 // We will set up interceptors dynamically to avoid circular dependencies
 export const setupInterceptors = (
   getToken: () => string | null,
   getWorkspaceId: () => string | null,
-  onLogout: () => void
+  onLogout: () => void,
+  onRefresh: () => Promise<string | null>
 ) => {
+  // Clear any existing interceptors to avoid duplication (especially during HMR)
+  (api.interceptors.request as any).handlers = [];
+  (api.interceptors.response as any).handlers = [];
+
   api.interceptors.request.use(
     (config) => {
       const token = getToken();
@@ -27,9 +46,49 @@ export const setupInterceptors = (
   api.interceptors.response.use(
     (response) => response,
     async (error) => {
-      if (error.response?.status === 401) {
+      const originalRequest = error.config;
+
+      // Handle 401 (Unauthorized) - Attempt Refresh
+      if (error.response?.status === 401 && !originalRequest._retry) {
+        if (isRefreshing) {
+          return new Promise((resolve, reject) => {
+            failedQueue.push({ resolve, reject });
+          })
+            .then((token) => {
+              originalRequest.headers.Authorization = `Bearer ${token}`;
+              return api(originalRequest);
+            })
+            .catch((err) => Promise.reject(err));
+        }
+
+        originalRequest._retry = true;
+        isRefreshing = true;
+
+        try {
+          const newToken = await onRefresh();
+          if (newToken) {
+            originalRequest.headers.Authorization = `Bearer ${newToken}`;
+            processQueue(null, newToken);
+            return api(originalRequest);
+          } else {
+            onLogout();
+            processQueue(new Error("Refresh failed"), null);
+            return Promise.reject(error);
+          }
+        } catch (refreshError) {
+          onLogout();
+          processQueue(refreshError, null);
+          return Promise.reject(refreshError);
+        } finally {
+          isRefreshing = false;
+        }
+      }
+
+      // Handle 403 (Forbidden) - Logout immediately
+      if (error.response?.status === 403) {
         onLogout();
       }
+
       return Promise.reject(error);
     }
   );

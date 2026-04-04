@@ -34,6 +34,7 @@ import NotFound from "@/pages/NotFound";
 import LandingPage from "@/pages/LandingPage";
 
 import { AuthProvider } from "@/components/AuthProvider";
+import { ProtectedRoute } from "@/components/ProtectedRoute";
 
 const queryClient = new QueryClient();
 
@@ -53,7 +54,13 @@ const App = () => (
               <Route path="/forgot-password" element={<ForgotPassword />} />
 
               {/* Dashboard */}
-              <Route element={<DashboardLayout />}>
+              <Route 
+                element={
+                  <ProtectedRoute>
+                    <DashboardLayout />
+                  </ProtectedRoute>
+                }
+              >
                 <Route path="/dashboard" element={<Dashboard />} />
                 <Route path="/analytics" element={<Analytics />} />
                 <Route path="/agents" element={<AgentsList />} />

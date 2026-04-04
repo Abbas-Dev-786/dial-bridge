@@ -1,0 +1,114 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=DM+Mono:wght@400;500&family=JetBrains+Mono:wght@400;500&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 40 18% 97%;
+    --foreground: 40 10% 10%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 40 10% 10%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 40 10% 10%;
+
+    --primary: 15 85% 50%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 40 12% 94%;
+    --secondary-foreground: 40 10% 10%;
+
+    --muted: 40 10% 94%;
+    --muted-foreground: 40 5% 42%;
+
+    --accent: 40 12% 92%;
+    --accent-foreground: 40 10% 10%;
+
+    --destructive: 4 68% 46%;
+    --destructive-foreground: 0 0% 100%;
+
+    --success: 152 65% 33%;
+    --success-foreground: 0 0% 100%;
+
+    --warning: 33 85% 38%;
+    --warning-foreground: 0 0% 100%;
+
+    --border: 40 10% 89%;
+    --input: 40 10% 87%;
+    --ring: 15 85% 50%;
+
+    --radius: 0.625rem;
+
+    --sidebar-background: 40 14% 96%;
+    --sidebar-foreground: 40 10% 10%;
+    --sidebar-primary: 15 85% 50%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 40 12% 92%;
+    --sidebar-accent-foreground: 40 10% 10%;
+    --sidebar-border: 40 10% 89%;
+    --sidebar-ring: 15 85% 50%;
+  }
+
+  .dark {
+    --background: 30 6% 8%;
+    --foreground: 40 15% 93%;
+
+    --card: 30 6% 11%;
+    --card-foreground: 40 15% 93%;
+
+    --popover: 30 6% 11%;
+    --popover-foreground: 40 15% 93%;
+
+    --primary: 15 85% 50%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 30 6% 16%;
+    --secondary-foreground: 40 15% 93%;
+
+    --muted: 30 6% 16%;
+    --muted-foreground: 30 5% 50%;
+
+    --accent: 30 6% 18%;
+    --accent-foreground: 40 15% 93%;
+
+    --destructive: 4 60% 38%;
+    --destructive-foreground: 40 15% 93%;
+
+    --success: 152 65% 33%;
+    --success-foreground: 0 0% 100%;
+
+    --warning: 33 85% 38%;
+    --warning-foreground: 0 0% 100%;
+
+    --border: 30 6% 18%;
+    --input: 30 6% 18%;
+    --ring: 15 85% 50%;
+
+    --sidebar-background: 30 6% 11%;
+    --sidebar-foreground: 40 15% 93%;
+    --sidebar-primary: 15 85% 50%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 30 6% 18%;
+    --sidebar-accent-foreground: 40 15% 93%;
+    --sidebar-border: 30 6% 18%;
+    --sidebar-ring: 15 85% 50%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground font-body antialiased;
+  }
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-display;
+  }
+  code, pre, .font-mono {
+    font-family: 'JetBrains Mono', monospace;
+  }
+}

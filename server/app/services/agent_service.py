@@ -1,15 +1,14 @@
 from uuid import UUID
 from datetime import datetime
-from sqlalchemy import select, and_, exists
+from sqlalchemy import select, and_
 from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.agent import Agent, AgentVoiceConfig, AgentConversationConfig, AgentTool
 from app.models.workspace import Workspace
 from app.models.user import User
 from app.schemas.agent import AgentCreate, AgentUpdate, VoiceConfigCreate, ConversationConfigCreate, AgentToolCreate
-from app.services.elevenlabs_client import get_elevenlabs_client
 from app.enums import AgentStatus, ToolType
-from app.exceptions import NotFoundError, ConflictError, ElevenLabsError
+from app.exceptions import NotFoundError, ConflictError
 from app.utils.audit import log_action
 
 def build_elevenlabs_agent_payload(
@@ -75,7 +74,6 @@ async def get_active_campaign(db: AsyncSession, agent: Agent):
     """
     Query campaigns where agent_id = agent.id AND status IN ('live','scheduled') AND deleted_at IS NULL
     Returns None if agent is free.
-    Placeholder until Phase 4.
     """
     return None
 
@@ -196,7 +194,6 @@ async def list_agents(db: AsyncSession, workspace_id: UUID) -> list[Agent]:
         )
         .order_by(Agent.created_at.desc())
     )
-    # TODO: Left join campaigns in Phase 4
     result = await db.execute(stmt)
     return list(result.scalars().all())
 

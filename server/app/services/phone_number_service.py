@@ -11,9 +11,7 @@ from app.services.elevenlabs_client import get_elevenlabs_client
 from app.enums import PhoneProvider, PhoneNumberStatus, PhoneNumberType
 from app.exceptions import NotFoundError, ConflictError, ValidationError
 
-# For SIP password encryption (Simplified for now, using a placeholder or Fernet if needed)
-# Since we need to be consistent, let's use a basic encryption/decryption placeholder
-# In production, use a proper key management system.
+# For SIP password encryption
 def encrypt_password(password: str) -> str:
     # Placeholder: In a real app, use Fernet or similar
     # For now, we'll store it as "enc:<password>" to simulate encryption
@@ -138,7 +136,6 @@ async def list_phone_numbers(db: AsyncSession, workspace_id: UUID, status_filter
         stmt = stmt.where(PhoneNumber.status == status_filter)
     
     stmt = stmt.order_by(PhoneNumber.created_at.desc())
-    # TODO: Left join campaigns in Phase 5
     result = await db.execute(stmt)
     return list(result.scalars().all())
 
@@ -152,13 +149,8 @@ async def update_phone_number(db: AsyncSession, phone_number: PhoneNumber, data:
     return phone_number
 
 async def release_phone_number(db: AsyncSession, phone_number: PhoneNumber) -> None:
-    # Check active campaign (placeholder for Phase 5)
-    # if phone_number.active_campaign_id:
-    #     raise ConflictError("Cannot release a phone number assigned to an active campaign.")
-
     phone_number.status = PhoneNumberStatus.released
     phone_number.released_at = datetime.utcnow()
-    # Remove campaign assignment if exists (Phase 5)
     
     await db.commit()
 

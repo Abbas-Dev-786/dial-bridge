@@ -117,7 +117,7 @@ class ElevenLabsClient:
         data = await self._request("GET", f"/convai/agents/{agent_id}/knowledge-base")
         return data.get("documents", [])
 
-    # ── Telephony endpoints (used in Phase 4) ─────────────────
+    # ── Telephony endpoints ─────────────────
 
     async def list_phone_numbers(self) -> list[dict]:
         """

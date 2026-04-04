@@ -70,15 +70,8 @@ async def cleanup_deleted_workspace_resources():
                 
                 for phone in phones:
                     try:
-                        # For platform account, we probably just want to unassign it 
-                        # so it can be used by other workspaces if it's a shared account policy.
-                        # However, Step 11 says "delete ElevenLabs resources".
-                        # If the number belongs to us, we might keep it but it should be unassigned.
-                        # If 'delete' means releasing the number entirely from the account:
-                        # (Not usually what you want if you paid for it, but following 'delete resources' literally)
-                        # I'll implement unassign_phone_from_agent and if there's a 'release' API I'd call it.
+                        # Unassign the phone number from the agent it was attached to.
                         await client.unassign_phone_from_agent(phone.elevenlabs_number_id)
-                        # phone.elevenlabs_number_id = None # If we released it
                         logger.info(f"Unassigned ElevenLabs number {phone.number} for workspace {ws.id}")
                     except Exception as e:
                         logger.error(f"Failed to cleanup ElevenLabs number {phone.number}: {e}")

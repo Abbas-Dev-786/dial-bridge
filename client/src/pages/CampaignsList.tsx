@@ -1,26 +1,56 @@
-import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState, useEffect, useMemo } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { DataTable, Column } from "@/components/shared/DataTable";
 import { StatusBadge } from "@/components/shared/StatusBadge";
+import { KBSyncBadge } from "@/components/shared/KBSyncBadge";
 import { Progress } from "@/components/ui/progress";
-import { Plus, Megaphone, Play, Pause, MoreHorizontal, Copy } from "lucide-react";
+import { Plus, Megaphone, Play, Pause, MoreHorizontal, Copy, Loader2, AlertCircle } from "lucide-react";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { CreateCampaignModal } from "@/components/dialogs/CreateCampaignModal";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
+import { useWorkspaceStore } from "@/store/useWorkspaceStore";
+import api from "@/lib/api";
 
-const campaigns = [
-  { id: "1", name: "Q1 Outreach", agent: "Sales Bot", status: "live" as const, contacted: 842, total: 1200, successRate: "68%", startDate: "Jan 15, 2026" },
-  { id: "2", name: "Product Launch", agent: "Outreach Pro", status: "paused" as const, contacted: 156, total: 500, successRate: "72%", startDate: "Feb 1, 2026" },
-  { id: "3", name: "Survey Q1", agent: "Survey Agent", status: "draft" as const, contacted: 0, total: 300, successRate: "—", startDate: "—" },
-  { id: "4", name: "Re-engagement", agent: "Sales Bot", status: "completed" as const, contacted: 1100, total: 1100, successRate: "55%", startDate: "Dec 10, 2025" },
-];
+interface CampaignListItem {
+  id: string;
+  name: string;
+  status: "draft" | "scheduled" | "live" | "paused" | "completed" | "archived";
+  agent_name: string | null;
+  agent_was_generated: boolean;
+  contacts_total: number;
+  contacts_called: number;
+  calls_successful: number;
+  total_spend_cents: number;
+  kb_sync_status: "pending" | "syncing" | "synced" | "failed";
+  created_at: string;
+}
 
 export default function CampaignsList() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { toast } = useToast();
   const [createOpen, setCreateOpen] = useState(false);
+  const { activeWorkspaceId } = useWorkspaceStore();
+
+  const statusFilter = searchParams.get("status");
+
+  const { data: campaigns = [], isLoading, isError, error, refetch } = useQuery({
+    queryKey: ["campaigns", activeWorkspaceId, statusFilter],
+    queryFn: async () => {
+      if (!activeWorkspaceId) return [];
+      const response = await api.get(`/api/v1/workspaces/${activeWorkspaceId}/campaigns`, {
+        params: {
+          status: statusFilter ? statusFilter.split(",") : undefined,
+        },
+      });
+      return response.data as CampaignListItem[];
+    },
+    enabled: !!activeWorkspaceId,
+  });
 
   // Keyboard shortcut: C to open modal
   useEffect(() => {
@@ -33,31 +63,87 @@ export default function CampaignsList() {
     return () => window.removeEventListener("keydown", handler);
   }, []);
 
-  const handleDuplicate = (name: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    toast({ title: "Campaign duplicated", description: `"Copy of ${name}" saved as Draft.` });
-  };
-
-  const columns: Column<typeof campaigns[0]>[] = [
-    { key: "name", label: "Campaign", sortable: true, render: (r) => <span className="font-medium">{r.name}</span> },
-    { key: "agent", label: "Agent", sortable: true, hideOnMobile: true },
-    { key: "status", label: "Status", render: (r) => <StatusBadge status={r.status} /> },
+  const columns: Column<CampaignListItem>[] = useMemo(() => [
+    { 
+      key: "name", 
+      label: "Campaign", 
+      sortable: true, 
+      render: (r) => (
+        <div className="flex flex-col gap-0.5">
+          <span className="font-medium">{r.name}</span>
+          <span className="text-[10px] text-muted-foreground">Created {new Date(r.created_at).toLocaleDateString()}</span>
+        </div>
+      ) 
+    },
+    { 
+      key: "agent", 
+      label: "Agent", 
+      sortable: true, 
+      hideOnMobile: true,
+      render: (r) => (
+        <span className={cn("text-sm", !r.agent_name && "text-muted-foreground italic")}>
+          {r.agent_name || "Generation pending..."}
+        </span>
+      )
+    },
+    { 
+      key: "status", 
+      label: "Status", 
+      render: (r) => <StatusBadge status={r.status} /> 
+    },
+    {
+      key: "kb_sync",
+      label: "KB Sync",
+      hideOnMobile: true,
+      render: (r) => <KBSyncBadge status={r.kb_sync_status} />
+    },
     {
       key: "progress", label: "Progress", hideOnMobile: true,
-      render: (r) => (
-        <div className="flex items-center gap-2 min-w-[120px]">
-          <Progress value={(r.contacted / r.total) * 100} className="h-1.5 flex-1" />
-          <span className="text-xs text-muted-foreground whitespace-nowrap">{r.contacted}/{r.total}</span>
-        </div>
-      ),
+      render: (r) => {
+        const progress = r.contacts_total > 0 ? (r.contacts_called / r.contacts_total) * 100 : 0;
+        return (
+          <div className="flex flex-col gap-1.5 min-w-[140px]">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">
+                {r.contacts_called} / {r.contacts_total}
+              </span>
+              <span className="text-[10px] font-medium">{progress.toFixed(0)}%</span>
+            </div>
+            <Progress value={progress} className="h-1 flex-1" />
+          </div>
+        );
+      },
     },
-    { key: "successRate", label: "Success", sortable: true, hideOnMobile: true },
+    { 
+      key: "successRate", 
+      label: "Success", 
+      sortable: true, 
+      hideOnMobile: true,
+      render: (r) => {
+        if (r.contacts_called === 0) return <span className="text-muted-foreground">—</span>;
+        const rate = (r.calls_successful / r.contacts_called) * 100;
+        return <span className="font-medium">{rate.toFixed(0)}%</span>;
+      }
+    },
+    {
+      key: "spend",
+      label: "Spend",
+      hideOnMobile: true,
+      render: (r) => (
+        <span className="text-sm">
+          {(r.total_spend_cents / 100).toLocaleString("en-US", { style: "currency", currency: "USD" })}
+        </span>
+      )
+    },
     {
       key: "actions", label: "",
       render: (r) => (
         <div className="flex items-center gap-1">
           {r.status !== "draft" && r.status !== "completed" && (
-            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={(e) => e.stopPropagation()}>
+            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={(e) => {
+              e.stopPropagation();
+              // In the future: handle pause/play API
+            }}>
               {r.status === "live" ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
             </Button>
           )}
@@ -68,15 +154,39 @@ export default function CampaignsList() {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={(e) => handleDuplicate(r.name, e)}>
-                <Copy className="mr-2 h-3.5 w-3.5" /> Duplicate
+              <DropdownMenuItem disabled className="opacity-50 cursor-not-allowed">
+                <Copy className="mr-2 h-3.5 w-3.5" /> Duplicate (TBD)
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
       ),
     },
-  ];
+  ], []);
+
+  if (isLoading) {
+    return (
+      <div className="flex h-[400px] flex-col items-center justify-center gap-4 text-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <p className="text-sm text-muted-foreground">Fetching your campaigns...</p>
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <div className="flex h-[400px] flex-col items-center justify-center gap-4 text-center">
+        <div className="rounded-full bg-destructive/10 p-3">
+          <AlertCircle className="h-6 w-6 text-destructive" />
+        </div>
+        <div>
+          <h3 className="text-lg font-semibold tracking-tight">Failed to load campaigns</h3>
+          <p className="text-sm text-muted-foreground">{(error as any)?.response?.data?.detail || "An unexpected error occurred."}</p>
+        </div>
+        <Button variant="outline" onClick={() => refetch()}>Try Again</Button>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -91,9 +201,21 @@ export default function CampaignsList() {
       </div>
 
       {campaigns.length > 0 ? (
-        <DataTable columns={columns} data={campaigns} searchKey="name" searchPlaceholder="Search campaigns..." onRowClick={(r) => navigate(`/campaigns/${r.id}`)} />
+        <DataTable 
+          columns={columns} 
+          data={campaigns} 
+          searchKey="name" 
+          searchPlaceholder="Search campaigns..." 
+          onRowClick={(r) => navigate(`/campaigns/${r.id}`)} 
+        />
       ) : (
-        <EmptyState icon={Megaphone} title="No campaigns yet" description="Launch your first outbound campaign." actionLabel="Create Campaign" onAction={() => setCreateOpen(true)} />
+        <EmptyState 
+          icon={Megaphone} 
+          title="No campaigns yet" 
+          description="Launch your first outbound campaign." 
+          actionLabel="Create Campaign" 
+          onAction={() => setCreateOpen(true)} 
+        />
       )}
 
       <CreateCampaignModal open={createOpen} onOpenChange={setCreateOpen} />

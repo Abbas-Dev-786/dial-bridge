@@ -1,6 +1,6 @@
 import { cn } from "@/lib/utils";
 
-type Status = "live" | "paused" | "error" | "draft" | "ready" | "completed";
+type Status = "live" | "paused" | "error" | "draft" | "ready" | "completed" | "scheduled" | "archived";
 
 const statusConfig: Record<Status, { label: string; dotClass: string; bgClass: string; textClass: string }> = {
   live: {
@@ -38,6 +38,18 @@ const statusConfig: Record<Status, { label: string; dotClass: string; bgClass: s
     dotClass: "bg-success",
     bgClass: "bg-success/10",
     textClass: "text-success",
+  },
+  scheduled: {
+    label: "Scheduled",
+    dotClass: "bg-blue-500",
+    bgClass: "bg-blue-500/10",
+    textClass: "text-blue-600",
+  },
+  archived: {
+    label: "Archived",
+    dotClass: "bg-slate-400",
+    bgClass: "bg-slate-400/10",
+    textClass: "text-slate-500",
   },
 };
 

@@ -1,57 +1,295 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Drawer, DrawerContent, DrawerTitle } from "@/components/ui/drawer";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { ChevronDown } from "lucide-react";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
+import { ChevronDown, Loader2, AlertCircle, Save } from "lucide-react";
 import { DeleteConfirmDialog } from "@/components/dialogs/DeleteConfirmDialog";
 import { useToast } from "@/hooks/use-toast";
-import { VoiceSettings, defaultVoiceConfig } from "@/components/VoiceSettings";
-import { ConversationFlowSettings, defaultConversationFlowConfig } from "@/components/ConversationFlowSettings";
-import { ToolsConfig, defaultToolConfig } from "@/components/ToolsConfig";
-import { WebWidgetConfig } from "@/components/WebWidgetConfig";
+import { VoiceSettings, VoiceConfig } from "@/components/VoiceSettings";
+import {
+  ConversationFlowSettings,
+  ConversationFlowConfig,
+} from "@/components/ConversationFlowSettings";
+import { ToolsConfig, ToolConfig } from "@/components/ToolsConfig";
 import { VoicePlayground } from "@/components/VoicePlayground";
 import { cn } from "@/lib/utils";
-import { ACTIVE_AGENT_CAMPAIGNS } from "@/lib/agent-constants";
 import { AgentHeader } from "@/components/agent-detail/AgentHeader";
-import { AgentConfigCard, AgentActiveBanner } from "@/components/agent-detail/AgentConfigCard";
+import {
+  AgentConfigCard,
+  AgentActiveBanner,
+} from "@/components/agent-detail/AgentConfigCard";
+import { useWorkspaceStore } from "@/store/useWorkspaceStore";
+import api from "@/lib/api";
 
 export default function AgentDetail() {
   const navigate = useNavigate();
   const { id } = useParams();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const { activeWorkspaceId } = useWorkspaceStore();
+
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [voiceConfig, setVoiceConfig] = useState(defaultVoiceConfig);
-  const [flowConfig, setFlowConfig] = useState(defaultConversationFlowConfig);
-  const [toolConfig, setToolConfig] = useState(defaultToolConfig);
   const [voiceOpen, setVoiceOpen] = useState(false);
   const [conversationOpen, setConversationOpen] = useState(false);
   const [toolsOpen, setToolsOpen] = useState(false);
 
-  const activeCampaign = ACTIVE_AGENT_CAMPAIGNS[id || ""];
-  const isActive = !!activeCampaign;
+  // Form State
+  const [agentData, setAgentData] = useState<any>(null);
+
+  // Fetch Agent
+  const {
+    data: agent,
+    isLoading,
+    isError,
+    error,
+  } = useQuery({
+    queryKey: ["agent", activeWorkspaceId, id],
+    queryFn: async () => {
+      if (!activeWorkspaceId || !id) return null;
+      const response = await api.get(
+        `/api/v1/workspaces/${activeWorkspaceId}/agents/${id}`,
+      );
+      return response.data;
+    },
+    enabled: !!activeWorkspaceId && !!id,
+  });
+
+  // Initialize form state from fetched data
+  useEffect(() => {
+    if (agent) {
+      // Convert backend structure to frontend structure
+      const v = agent.voice_config;
+      const c = agent.conversation_config;
+
+      const mappedTools: ToolConfig = {
+        systemTools: agent.tools
+          .filter((t: any) => t.tool_type === "system" && t.is_enabled)
+          .map((t: any) => t.name),
+        clientTools: agent.tools
+          .filter((t: any) => t.tool_type === "client" && t.is_enabled)
+          .map((t: any) => t.name),
+        serverTools: agent.tools
+          .filter((t: any) => t.tool_type === "server")
+          .map((t: any) => ({
+            id: t.id,
+            name: t.name,
+            description: t.description || "",
+            url: t.url || "",
+            method: t.http_method || "POST",
+            headers: JSON.stringify(t.headers || {}, null, 2),
+          })),
+      };
+
+      setAgentData({
+        name: agent.name,
+        llm_model: agent.llm_model,
+        temperature: agent.temperature,
+        max_tokens: agent.max_tokens,
+        system_prompt: agent.system_prompt || "",
+        first_message: agent.first_message || "",
+        voice: {
+          voiceId: v?.voice_id || "EXAVITQu4vr4xnSDxMaL",
+          stability: [v?.stability ?? 50],
+          similarityBoost: [v?.similarity_boost ?? 75],
+          style: [v?.style ?? 0],
+          speed: [v?.speed ?? 100],
+        },
+        flow: {
+          firstMessage: agent.first_message || "",
+          language: c?.language || "en",
+          maxDuration: (c?.max_duration_seconds || 300).toString(),
+          endCallAfterSilence: (
+            c?.end_call_after_silence_secs || 30
+          ).toString(),
+          interruptionSensitivity: c?.interruption_sensitivity || "medium",
+          turnEndpointDelay: (c?.turn_endpoint_delay_ms || 500).toString(),
+          enableBackchannel: c?.enable_backchannel ?? true,
+          enableDataCollection: c?.enable_data_collection ?? false,
+          dataCollectionFields: JSON.stringify(
+            c?.data_collection_fields || [],
+            null,
+            2,
+          ),
+        },
+        tools: mappedTools,
+      });
+    }
+  }, [agent]);
+
+  // Mutations
+  const updateMutation = useMutation({
+    mutationFn: async (data: any) => {
+      // Convert frontend structure back to backend structure
+      const payload = {
+        name: data.name,
+        llm_model: data.llm_model,
+        system_prompt: data.system_prompt,
+        first_message: data.voice.firstMessage || data.flow.firstMessage,
+        temperature: data.temperature,
+        max_tokens: data.max_tokens,
+        voice_config: {
+          voice_id: data.voice.voiceId,
+          stability: data.voice.stability[0],
+          similarity_boost: data.voice.similarityBoost[0],
+          style: data.voice.style[0],
+          speed: data.voice.speed[0],
+        },
+        conversation_config: {
+          language: data.flow.language,
+          max_duration_seconds: parseInt(data.flow.maxDuration),
+          end_call_after_silence_secs: parseInt(data.flow.endCallAfterSilence),
+          interruption_sensitivity: data.flow.interruptionSensitivity,
+          turn_endpoint_delay_ms: parseInt(data.flow.turnEndpointDelay),
+          enable_backchannel: data.flow.enableBackchannel,
+          enable_data_collection: data.flow.enableDataCollection,
+          data_collection_fields: data.flow.dataCollectionFields
+            ? JSON.parse(data.flow.dataCollectionFields)
+            : [],
+        },
+        // Tools are handled separately or via complex patching in real world,
+        // but for now we follow the schema
+        tools: [
+          ...data.tools.systemTools.map((name: string) => ({
+            name,
+            tool_type: "system",
+            is_enabled: true,
+          })),
+          ...data.tools.clientTools.map((name: string) => ({
+            name,
+            tool_type: "client",
+            is_enabled: true,
+          })),
+          ...data.tools.serverTools.map((t: any) => ({
+            name: t.name,
+            description: t.description,
+            tool_type: "server",
+            url: t.url,
+            http_method: t.method,
+            headers: t.headers ? JSON.parse(t.headers) : {},
+            is_enabled: true,
+          })),
+        ],
+      };
+
+      const response = await api.patch(
+        `/api/v1/workspaces/${activeWorkspaceId}/agents/${id}`,
+        payload,
+      );
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ["agent", activeWorkspaceId, id],
+      });
+      toast({
+        title: "Changes saved",
+        description: "Agent configuration has been updated.",
+      });
+    },
+    onError: (err: any) => {
+      toast({
+        title: "Error saving changes",
+        description:
+          err.response?.data?.detail || "An unexpected error occurred.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async () => {
+      await api.delete(`/api/v1/workspaces/${activeWorkspaceId}/agents/${id}`);
+    },
+    onSuccess: () => {
+      toast({
+        title: "Agent deleted",
+        description: "The agent has been permanently removed.",
+      });
+      navigate("/agents");
+    },
+    onError: (err: any) => {
+      toast({
+        title: "Error deleting agent",
+        description:
+          err.response?.data?.detail || "An unexpected error occurred.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleUpdate = (field: string, value: any) => {
+    setAgentData((prev: any) => ({ ...prev, [field]: value }));
+  };
+
+  if (isLoading || !agentData) {
+    return (
+      <div className="flex h-[400px] flex-col items-center justify-center gap-4 text-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <p className="text-sm text-muted-foreground">
+          Loading agent configuration...
+        </p>
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <div className="flex h-[400px] flex-col items-center justify-center gap-4 text-center">
+        <div className="rounded-full bg-destructive/10 p-3">
+          <AlertCircle className="h-6 w-6 text-destructive" />
+        </div>
+        <div>
+          <h3 className="text-lg font-semibold tracking-tight">
+            Failed to load agent
+          </h3>
+          <p className="text-sm text-muted-foreground">
+            {(error as any)?.response?.data?.detail ||
+              "An unexpected error occurred."}
+          </p>
+        </div>
+        <Button variant="outline" onClick={() => navigate("/agents")}>
+          Back to Agents
+        </Button>
+      </div>
+    );
+  }
+
+  const isActive = !!agent.active_campaign_id;
 
   return (
     <div className="space-y-6 max-w-4xl mx-auto pb-10">
-      <AgentHeader 
-        id={id || ""} 
-        name="Sales Bot" 
-        status="live" 
-        onTest={() => setDrawerOpen(true)} 
-        onDelete={() => setDeleteOpen(true)} 
+      <AgentHeader
+        id={id || ""}
+        name={agentData.name}
+        status={agent.status}
+        onTest={() => setDrawerOpen(true)}
+        onDelete={() => setDeleteOpen(true)}
       />
 
-      {isActive && <AgentActiveBanner campaign={activeCampaign} />}
+      {isActive && <AgentActiveBanner campaign={agent.active_campaign_name} />}
 
-      <AgentConfigCard 
-        isActive={isActive} 
-        name="Sales Bot" 
-        model="gpt-4o" 
-        temperature={0.7} 
-        maxTokens={1024} 
-        prompt="You are a professional sales assistant for Acme Corp. Your goal is to qualify leads and schedule demo calls." 
+      <AgentConfigCard
+        isActive={isActive}
+        name={agentData.name}
+        model={agentData.llm_model}
+        temperature={agentData.temperature}
+        maxTokens={agentData.max_tokens}
+        prompt={agentData.system_prompt}
+        onChange={handleUpdate}
       />
 
       {/* Voice Settings Card — Collapsible */}
@@ -62,16 +300,31 @@ export default function AgentDetail() {
               <div className="flex items-center justify-between">
                 <div>
                   <CardTitle className="text-lg">Voice Settings</CardTitle>
-                  <CardDescription>Voice provider, language, and speech configuration.</CardDescription>
+                  <CardDescription>
+                    Voice provider, language, and speech configuration.
+                  </CardDescription>
                 </div>
-                <ChevronDown className={cn("h-4 w-4 text-muted-foreground transition-transform duration-200", voiceOpen && "rotate-180")} />
+                <ChevronDown
+                  className={cn(
+                    "h-4 w-4 text-muted-foreground transition-transform duration-200",
+                    voiceOpen && "rotate-180",
+                  )}
+                />
               </div>
             </CardHeader>
           </CollapsibleTrigger>
           <CollapsibleContent className="transition-all duration-300">
-            <CardContent className={cn("pt-0", isActive && "pointer-events-none opacity-60")}>
+            <CardContent
+              className={cn(
+                "pt-0",
+                isActive && "pointer-events-none opacity-60",
+              )}
+            >
               <div className="pt-4 border-t">
-                <VoiceSettings config={voiceConfig} onChange={setVoiceConfig} />
+                <VoiceSettings
+                  config={agentData.voice}
+                  onChange={(v) => handleUpdate("voice", v)}
+                />
               </div>
             </CardContent>
           </CollapsibleContent>
@@ -86,16 +339,31 @@ export default function AgentDetail() {
               <div className="flex items-center justify-between">
                 <div>
                   <CardTitle className="text-lg">Conversation Flow</CardTitle>
-                  <CardDescription>Greeting, interruption handling, and flow behavior.</CardDescription>
+                  <CardDescription>
+                    Greeting, interruption handling, and flow behavior.
+                  </CardDescription>
                 </div>
-                <ChevronDown className={cn("h-4 w-4 text-muted-foreground transition-transform duration-200", conversationOpen && "rotate-180")} />
+                <ChevronDown
+                  className={cn(
+                    "h-4 w-4 text-muted-foreground transition-transform duration-200",
+                    conversationOpen && "rotate-180",
+                  )}
+                />
               </div>
             </CardHeader>
           </CollapsibleTrigger>
           <CollapsibleContent className="transition-all duration-300">
-            <CardContent className={cn("pt-0", isActive && "pointer-events-none opacity-60")}>
+            <CardContent
+              className={cn(
+                "pt-0",
+                isActive && "pointer-events-none opacity-60",
+              )}
+            >
               <div className="pt-4 border-t">
-                <ConversationFlowSettings config={flowConfig} onChange={setFlowConfig} />
+                <ConversationFlowSettings
+                  config={agentData.flow}
+                  onChange={(f) => handleUpdate("flow", f)}
+                />
               </div>
             </CardContent>
           </CollapsibleContent>
@@ -110,42 +378,56 @@ export default function AgentDetail() {
               <div className="flex items-center justify-between">
                 <div>
                   <CardTitle className="text-lg">Tools</CardTitle>
-                  <CardDescription>External tools and function calls available to the agent.</CardDescription>
+                  <CardDescription>
+                    External tools and function calls available to the agent.
+                  </CardDescription>
                 </div>
-                <ChevronDown className={cn("h-4 w-4 text-muted-foreground transition-transform duration-200", toolsOpen && "rotate-180")} />
+                <ChevronDown
+                  className={cn(
+                    "h-4 w-4 text-muted-foreground transition-transform duration-200",
+                    toolsOpen && "rotate-180",
+                  )}
+                />
               </div>
             </CardHeader>
           </CollapsibleTrigger>
           <CollapsibleContent className="transition-all duration-300">
-            <CardContent className={cn("pt-0", isActive && "pointer-events-none opacity-60")}>
+            <CardContent
+              className={cn(
+                "pt-0",
+                isActive && "pointer-events-none opacity-60",
+              )}
+            >
               <div className="pt-4 border-t">
-                <ToolsConfig config={toolConfig} onChange={setToolConfig} />
+                <ToolsConfig
+                  config={agentData.tools}
+                  onChange={(t) => handleUpdate("tools", t)}
+                />
               </div>
             </CardContent>
           </CollapsibleContent>
         </Card>
       </Collapsible>
 
-      {/* Deploy Card — Always Open */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg">Deploy</CardTitle>
-          <CardDescription>Web widget embed code and deployment options.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <WebWidgetConfig agentId={id} />
-        </CardContent>
-      </Card>
-
       {/* Save Button */}
       <div className="flex justify-end pb-6">
         <Button
-          disabled={isActive}
+          disabled={isActive || updateMutation.isPending}
           size="lg"
           className="px-8"
-          onClick={() => toast({ title: "Changes saved", description: "Agent configuration has been updated." })}
+          onClick={() => updateMutation.mutate(agentData)}
         >
-          Save Changes
+          {updateMutation.isPending ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Saving Changes...
+            </>
+          ) : (
+            <>
+              <Save className="mr-2 h-4 w-4" />
+              Save Changes
+            </>
+          )}
         </Button>
       </div>
 
@@ -155,9 +437,9 @@ export default function AgentDetail() {
           <DrawerTitle className="sr-only">Voice Playground</DrawerTitle>
           <div className="overflow-y-auto p-4 pb-8">
             <VoicePlayground
-              voiceConfig={voiceConfig}
-              onVoiceConfigChange={setVoiceConfig}
-              agentName="Sales Bot"
+              voiceConfig={agentData.voice}
+              onVoiceConfigChange={(v) => handleUpdate("voice", v)}
+              agentName={agentData.name}
             />
           </div>
         </DrawerContent>
@@ -167,8 +449,8 @@ export default function AgentDetail() {
         open={deleteOpen}
         onOpenChange={setDeleteOpen}
         title="Delete Agent"
-        description="Are you sure you want to delete Sales Bot? This will stop all active campaigns using this agent. This action cannot be undone."
-        onConfirm={() => { setDeleteOpen(false); navigate("/agents"); }}
+        description={`Are you sure you want to delete ${agentData.name}? This will stop all active campaigns using this agent. This action cannot be undone.`}
+        onConfirm={() => deleteMutation.mutate()}
       />
     </div>
   );

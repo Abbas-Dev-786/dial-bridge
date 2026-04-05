@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from sqlalchemy.orm import joinedload
+from sqlalchemy.orm import joinedload, selectinload
 from sqlalchemy import select, and_, or_, func, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from celery.result import AsyncResult
@@ -99,13 +99,17 @@ async def create_campaign(
     )
     
     await db.commit()
-    await db.refresh(campaign, ["agent"])
-    return campaign
+    # Re-fetch with all relations for the response builder
+    return await get_campaign(db, workspace.id, campaign.id)
 
 async def get_campaign(db: AsyncSession, workspace_id: uuid.UUID, campaign_id: uuid.UUID) -> Campaign:
     result = await db.execute(
         select(Campaign)
-        .options(joinedload(Campaign.agent), joinedload(Campaign.phone_number))
+        .options(
+            joinedload(Campaign.agent).selectinload(Agent.tools),
+            joinedload(Campaign.agent).selectinload(Agent.voice_config),
+            joinedload(Campaign.phone_number)
+        )
         .where(
             and_(
                 Campaign.id == campaign_id,
@@ -161,8 +165,8 @@ async def update_campaign(db: AsyncSession, campaign: Campaign, data: CampaignUp
         setattr(campaign, key, value)
     
     await db.commit()
-    await db.refresh(campaign)
-    return campaign
+    # Re-fetch with all relations for the response builder
+    return await get_campaign(db, campaign.workspace_id, campaign.id)
 
 # assign_agent removed - agents are auto-created and managed via agent detail endpoints.
 
@@ -193,8 +197,8 @@ async def assign_phone_number(db: AsyncSession, campaign: Campaign, data: Campai
     
     campaign.phone_number_id = data.phone_number_id
     await db.commit()
-    await db.refresh(campaign)
-    return campaign
+    # Re-fetch with all relations for the response builder
+    return await get_campaign(db, campaign.workspace_id, campaign.id)
 
 async def transition_status(db: AsyncSession, campaign: Campaign, new_status: CampaignStatus, workspace: Workspace) -> Campaign:
     current = campaign.status
@@ -324,8 +328,8 @@ async def transition_status(db: AsyncSession, campaign: Campaign, new_status: Ca
     )
 
     await db.commit()
-    await db.refresh(campaign)
-    return campaign
+    # Re-fetch with all relations for the response builder
+    return await get_campaign(db, campaign.workspace_id, campaign.id)
 
 async def take_kb_snapshot(db: AsyncSession, campaign: Campaign, trigger: KBSnapshotTrigger) -> CampaignKBSnapshot:
     # Fetch all non-deleted KB docs for this campaign

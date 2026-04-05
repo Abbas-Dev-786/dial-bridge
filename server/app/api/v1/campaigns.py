@@ -182,4 +182,6 @@ async def regenerate_agent(
     campaign.kb_sync_status         = KBSyncStatus.pending
     await db.commit()
 
+    # Re-fetch with all relations for the response builder
+    campaign = await campaign_service.get_campaign(db, workspace_id, campaign.id)
     return campaign_service.build_campaign_response(campaign)

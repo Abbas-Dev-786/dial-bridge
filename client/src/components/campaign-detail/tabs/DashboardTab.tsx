@@ -13,7 +13,18 @@ import { Button } from "@/components/ui/button";
 
 export function DashboardTab() {
   const navigate = useNavigate();
-  const { setActiveTab, contacts, integrationToggles } = useCampaignStore();
+  const { setActiveTab, contactsData, activeCampaign } = useCampaignStore();
+
+  const stats = {
+    contacted: activeCampaign?.contacts_called || 0,
+    totalContacts: activeCampaign?.total_contacts || 0,
+    successRate: activeCampaign?.contacts_called > 0 
+      ? Math.round((activeCampaign.calls_successful / activeCampaign.contacts_called) * 100) 
+      : 0,
+    failed: activeCampaign?.calls_failed || 0,
+    spend: (activeCampaign?.total_spend_cents || 0) / 100,
+    remaining: activeCampaign?.contacts_remaining || 0,
+  };
 
   const callColumns: Column<typeof CAMPAIGN_CALLS[0]>[] = [
     { key: "contactName", label: "Name", render: (r) => <span className="font-medium">{r.contactName}</span> },
@@ -32,11 +43,11 @@ export function DashboardTab() {
           <div className="flex items-center gap-3">
             <div className="rounded-lg bg-primary/10 p-2"><Users className="h-4 w-4 text-primary" /></div>
             <div>
-              <p className="text-xs text-muted-foreground">Contacted</p>
-              <p className="text-xl font-bold">842 <span className="text-xs font-normal text-muted-foreground">/ 1,200</span></p>
+              <p className="text-xs text-muted-foreground">Called</p>
+              <p className="text-xl font-bold">{stats.contacted.toLocaleString()} <span className="text-xs font-normal text-muted-foreground">/ {stats.totalContacts.toLocaleString()}</span></p>
             </div>
           </div>
-          <Progress value={70} className="mt-3 h-1.5" />
+          <Progress value={stats.totalContacts > 0 ? (stats.contacted / stats.totalContacts) * 100 : 0} className="mt-3 h-1.5" />
         </Card>
         <Card className="p-4">
           <div className="flex items-center gap-3">
@@ -44,8 +55,7 @@ export function DashboardTab() {
             <div>
               <p className="text-xs text-muted-foreground">Success Rate</p>
               <div className="flex items-baseline gap-2">
-                <p className="text-xl font-bold">68%</p>
-                <span className="text-xs font-medium text-success">↑ 3%</span>
+                <p className="text-xl font-bold">{stats.successRate}%</p>
               </div>
             </div>
           </div>
@@ -55,7 +65,7 @@ export function DashboardTab() {
             <div className="rounded-lg bg-destructive/10 p-2"><XCircle className="h-4 w-4 text-destructive" /></div>
             <div>
               <p className="text-xs text-muted-foreground">Failed</p>
-              <p className="text-xl font-bold">58</p>
+              <p className="text-xl font-bold">{stats.failed}</p>
             </div>
           </div>
         </Card>
@@ -64,7 +74,7 @@ export function DashboardTab() {
             <div className="rounded-lg bg-accent p-2"><DollarSign className="h-4 w-4 text-muted-foreground" /></div>
             <div>
               <p className="text-xs text-muted-foreground">Total Spend</p>
-              <p className="text-xl font-bold font-mono">$127.40</p>
+              <p className="text-xl font-bold font-mono">${stats.spend.toFixed(2)}</p>
             </div>
           </div>
         </Card>
@@ -79,11 +89,10 @@ export function DashboardTab() {
           </CardHeader>
           <CardContent className="space-y-1">
             {[
-              { label: "Agent", value: "Sales Bot Pro", click: "agents" },
-              { label: "Phone Number", value: "+1 (555) 100-2000", click: "phones" },
-              { label: "Knowledge Docs", value: `${KNOWLEDGE_DOCS.length}`, click: "knowledge" },
-              { label: "Integrations", value: `${Object.values(integrationToggles).filter(Boolean).length} active`, click: "integrations" },
-              { label: "Contacts", value: `${contacts.length} / 1200`, click: "contacts" },
+              { label: "Agent", value: activeCampaign?.agent?.name || "None", click: "agents" },
+              { label: "Phone Number", value: activeCampaign?.phone_number?.phone_number || "None", click: "phones" },
+              { label: "Contacts", value: `${stats.totalContacts} total`, click: "contacts" },
+              { label: "Remaining", value: `${stats.remaining} to call`, click: "contacts" },
             ].map((item) => (
               <button
                 key={item.label}

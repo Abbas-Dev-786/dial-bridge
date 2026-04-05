@@ -1,17 +1,19 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useParams } from "react-router-dom";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Search, Download, Upload, UserPlus, Edit, Ban, Trash2, CheckCircle, XCircle } from "lucide-react";
+import { Search, Download, Upload, UserPlus, Edit, Trash2, CheckCircle, XCircle, ChevronLeft, ChevronRight, Ban } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useCampaignStore } from "@/store/useCampaignStore";
 import { useToast } from "@/hooks/use-toast";
+import { format } from "date-fns";
 
 type ContactStatus = "pending" | "calling" | "called" | "failed" | "opted_out" | "do_not_call";
 
-const contactStatusColors: Record<ContactStatus, string> = {
+const contactStatusColors: Record<string, string> = {
   pending: "bg-muted text-muted-foreground",
   calling: "bg-primary/10 text-primary",
   called: "bg-success/10 text-success",
@@ -21,39 +23,83 @@ const contactStatusColors: Record<ContactStatus, string> = {
 };
 
 export function ContactsTab() {
+  const { id } = useParams();
   const { toast } = useToast();
-  const { contacts, setContacts, setDialogState } = useCampaignStore();
+  const { 
+    contactsData, 
+    fetchContacts, 
+    addContact, 
+    updateContact, 
+    deleteContact, 
+    setDialogState,
+    activeCampaign
+  } = useCampaignStore();
+
   const [contactSearch, setContactSearch] = useState("");
   const [contactStatusFilter, setContactStatusFilter] = useState<string>("all");
   const [editingContactId, setEditingContactId] = useState<string | null>(null);
-  const [editForm, setEditForm] = useState({ name: "", phone: "", email: "", company: "" });
+  const [editForm, setEditForm] = useState({ full_name: "", phone: "", email: "", company: "" });
 
-  const filteredContacts = contacts
-    .filter(c => contactStatusFilter === "all" || c.status === contactStatusFilter)
-    .filter(c => 
-      c.name.toLowerCase().includes(contactSearch.toLowerCase()) || 
-      c.phone.includes(contactSearch) || 
-      c.email.toLowerCase().includes(contactSearch.toLowerCase())
-    );
+  useEffect(() => {
+    if (id) {
+      const params: any = {
+        page: contactsData.page,
+        page_size: contactsData.page_size,
+      };
+      if (contactSearch) params.search = contactSearch;
+      if (contactStatusFilter !== "all") params.status = [contactStatusFilter];
+      fetchContacts(id, params);
+    }
+  }, [id, contactSearch, contactStatusFilter, contactsData.page, contactsData.page_size, fetchContacts]);
 
   const handleEdit = (contact: any) => {
     setEditingContactId(contact.id);
-    setEditForm({ name: contact.name, phone: contact.phone, email: contact.email, company: contact.company });
+    setEditForm({ 
+      full_name: contact.full_name, 
+      phone: contact.phone, 
+      email: contact.email || "", 
+      company: contact.company || "" 
+    });
   };
 
-  const handleSave = (id: string) => {
-    if (!editForm.name.trim() || !editForm.phone.trim()) {
+  const handleSave = async (contactId: string) => {
+    if (!id) return;
+    if (!editForm.full_name.trim() || !editForm.phone.trim()) {
       toast({ title: "Missing fields", description: "Name and phone are required.", variant: "destructive" });
       return;
     }
-    setContacts(contacts.map(c => c.id === id ? { ...c, ...editForm } : c));
-    setEditingContactId(null);
-    toast({ title: "Contact updated" });
+    try {
+      await updateContact(id, contactId, editForm);
+      setEditingContactId(null);
+      toast({ title: "Contact updated" });
+    } catch (error) {
+      toast({ title: "Update failed", variant: "destructive" });
+    }
   };
 
-  const handleDelete = (id: string) => {
-    setContacts(contacts.filter(c => c.id !== id));
-    toast({ title: "Contact deleted" });
+  const handleDelete = async (contactId: string) => {
+    if (!id) return;
+    try {
+      await deleteContact(id, contactId);
+      toast({ title: "Contact deleted" });
+    } catch (error) {
+      toast({ title: "Delete failed", variant: "destructive" });
+    }
+  };
+
+  const handleMarkDNC = async (contactId: string) => {
+    if (!id) return;
+    try {
+      await updateContact(id, contactId, { is_dnc: true });
+      toast({ title: "Contact marked as DNC" });
+    } catch (error) {
+      toast({ title: "Operation failed", variant: "destructive" });
+    }
+  };
+
+  const setPage = (page: number) => {
+    if (!id) return;
+    fetchContacts(id, { page, page_size: contactsData.page_size, search: contactSearch, status: contactStatusFilter !== "all" ? [contactStatusFilter] : undefined });
   };
 
   return (
@@ -61,12 +107,9 @@ export function ContactsTab() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h2 className="text-lg font-semibold">Contact List</h2>
-          <p className="text-sm text-muted-foreground">{contacts.length} contacts loaded</p>
+          <p className="text-sm text-muted-foreground">{contactsData.total} contacts total</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={() => setDialogState("export", true)}>
-            <Download className="mr-1.5 h-3.5 w-3.5" /> Export CSV
-          </Button>
           <Button variant="outline" size="sm" onClick={() => setDialogState("importContacts", true)}>
             <Upload className="mr-1.5 h-3.5 w-3.5" /> Import CSV
           </Button>
@@ -76,24 +119,6 @@ export function ContactsTab() {
         </div>
       </div>
 
-      {/* Quick stats */}
-      <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
-        {([
-          { label: "Total", value: contacts.length, color: "" },
-          { label: "Pending", value: contacts.filter(c => c.status === "pending").length, color: "text-muted-foreground" },
-          { label: "Called", value: contacts.filter(c => c.status === "called").length, color: "text-success" },
-          { label: "Failed", value: contacts.filter(c => c.status === "failed").length, color: "text-destructive" },
-          { label: "Opted Out", value: contacts.filter(c => c.status === "opted_out").length, color: "text-warning" },
-          { label: "DNC", value: contacts.filter(c => c.status === "do_not_call").length, color: "text-destructive" },
-        ]).map((s) => (
-          <Card key={s.label} className="p-3 text-center">
-            <p className={cn("text-xl font-bold", s.color)}>{s.value}</p>
-            <p className="text-xs text-muted-foreground">{s.label}</p>
-          </Card>
-        ))}
-      </div>
-
-      {/* Filters */}
       <div className="flex flex-col sm:flex-row gap-3">
         <div className="relative flex-1 max-w-sm">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -113,29 +138,26 @@ export function ContactsTab() {
         </div>
       </div>
 
-      {/* Contacts Table */}
       <div className="rounded-xl border shadow-sm overflow-x-auto">
         <Table>
           <TableHeader>
             <TableRow className="bg-muted/40 hover:bg-muted/40">
               <TableHead className="text-xs font-semibold uppercase tracking-wider">Name</TableHead>
               <TableHead className="hidden sm:table-cell text-xs font-semibold uppercase tracking-wider">Phone</TableHead>
-              <TableHead className="hidden md:table-cell text-xs font-semibold uppercase tracking-wider">Email</TableHead>
-              <TableHead className="hidden lg:table-cell text-xs font-semibold uppercase tracking-wider">Company</TableHead>
-              <TableHead className="text-xs font-semibold uppercase tracking-wider">Status</TableHead>
+              <TableHead className="hidden md:table-cell text-xs font-semibold uppercase tracking-wider">Status</TableHead>
+              <TableHead className="hidden lg:table-cell text-xs font-semibold uppercase tracking-wider">Next Retry</TableHead>
               <TableHead className="text-xs font-semibold uppercase tracking-wider w-[120px]">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filteredContacts.map((contact) => (
+            {contactsData.items.map((contact) => (
               <TableRow key={contact.id} className="transition-colors hover:bg-accent/50">
                 {editingContactId === contact.id ? (
                   <>
-                    <TableCell><Input className="h-8 text-sm" value={editForm.name} onChange={e => setEditForm(p => ({ ...p, name: e.target.value }))} /></TableCell>
+                    <TableCell><Input className="h-8 text-sm" value={editForm.full_name} onChange={e => setEditForm(p => ({ ...p, full_name: e.target.value }))} /></TableCell>
                     <TableCell className="hidden sm:table-cell"><Input className="h-8 text-sm font-mono" value={editForm.phone} onChange={e => setEditForm(p => ({ ...p, phone: e.target.value }))} /></TableCell>
-                    <TableCell className="hidden md:table-cell"><Input className="h-8 text-sm" value={editForm.email} onChange={e => setEditForm(p => ({ ...p, email: e.target.value }))} /></TableCell>
-                    <TableCell className="hidden lg:table-cell"><Input className="h-8 text-sm" value={editForm.company} onChange={e => setEditForm(p => ({ ...p, company: e.target.value }))} /></TableCell>
-                    <TableCell><Badge variant="secondary" className={cn("text-xs capitalize", contactStatusColors[contact.status as ContactStatus])}>{contact.status.replace("_", " ")}</Badge></TableCell>
+                    <TableCell><Badge variant="secondary" className={cn("text-xs capitalize", contactStatusColors[contact.status])}>{contact.status.replace("_", " ")}</Badge></TableCell>
+                    <TableCell className="hidden lg:table-cell">-</TableCell>
                     <TableCell>
                       <div className="flex gap-1">
                         <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleSave(contact.id)}>
@@ -149,16 +171,24 @@ export function ContactsTab() {
                   </>
                 ) : (
                   <>
-                    <TableCell><span className="font-medium">{contact.name}</span></TableCell>
+                    <TableCell><span className="font-medium">{contact.full_name}</span></TableCell>
                     <TableCell className="hidden sm:table-cell"><span className="font-mono text-xs">{contact.phone}</span></TableCell>
-                    <TableCell className="hidden md:table-cell"><span className="text-xs text-muted-foreground">{contact.email}</span></TableCell>
-                    <TableCell className="hidden lg:table-cell"><span className="text-xs">{contact.company}</span></TableCell>
-                    <TableCell><Badge variant="secondary" className={cn("text-xs capitalize", contactStatusColors[contact.status as ContactStatus])}>{contact.status === "do_not_call" ? "DNC" : contact.status.replace("_", " ")}</Badge></TableCell>
+                    <TableCell className="hidden md:table-cell"><Badge variant="secondary" className={cn("text-xs capitalize", contactStatusColors[contact.status])}>{contact.status === "do_not_call" ? "DNC" : contact.status.replace("_", " ")}</Badge></TableCell>
+                    <TableCell className="hidden lg:table-cell">
+                      <span className="text-xs text-muted-foreground">
+                        {contact.status === "failed" && contact.next_retry_at ? format(new Date(contact.next_retry_at), "MMM d, HH:mm") : "-"}
+                      </span>
+                    </TableCell>
                     <TableCell>
                       <div className="flex gap-1">
                         <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleEdit(contact)}>
                           <Edit className="h-3.5 w-3.5" />
                         </Button>
+                        {!contact.is_dnc && (
+                          <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-warning" onClick={() => handleMarkDNC(contact.id)}>
+                            <Ban className="h-3.5 w-3.5" />
+                          </Button>
+                        )}
                         <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive" onClick={() => handleDelete(contact.id)}>
                           <Trash2 className="h-3.5 w-3.5" />
                         </Button>
@@ -171,6 +201,32 @@ export function ContactsTab() {
           </TableBody>
         </Table>
       </div>
+
+      {contactsData.total > contactsData.page_size && (
+        <div className="flex items-center justify-between py-4">
+          <p className="text-xs text-muted-foreground">
+            Showing {(contactsData.page - 1) * contactsData.page_size + 1} to {Math.min(contactsData.page * contactsData.page_size, contactsData.total)} of {contactsData.total}
+          </p>
+          <div className="flex gap-2">
+            <Button 
+              variant="outline" 
+              size="sm" 
+              disabled={contactsData.page <= 1}
+              onClick={() => setPage(contactsData.page - 1)}
+            >
+              <ChevronLeft className="h-4 w-4 mr-1" /> Previous
+            </Button>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              disabled={!contactsData.has_next}
+              onClick={() => setPage(contactsData.page + 1)}
+            >
+              Next <ChevronRight className="h-4 w-4 ml-1" />
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

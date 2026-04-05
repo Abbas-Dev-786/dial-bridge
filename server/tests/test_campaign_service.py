@@ -59,19 +59,30 @@ async def test_create_campaign_automated(mock_workspace, mock_user, mock_generat
             )
             mock_create_agent.return_value = mock_agent
 
-            campaign = await campaign_service.create_campaign(
-                mock_db, mock_workspace, mock_user, campaign_data
-            )
+            with patch("app.services.campaign_service.get_campaign", new_callable=AsyncMock) as mock_get_campaign:
+                mock_get_campaign.return_value = Campaign(
+                    id=uuid.uuid4(),
+                    workspace_id=mock_workspace.id,
+                    name="Test Campaign",
+                    status=CampaignStatus.draft,
+                    agent_id=mock_agent.id,
+                    agent_was_generated=True,
+                    agent_generation_failed=False
+                )
 
-            assert campaign.name == "Test Campaign"
-            assert campaign.agent_id == mock_agent.id
-            assert campaign.agent_was_generated is True
-            assert campaign.agent_generation_failed is False
-            assert campaign.status == CampaignStatus.draft
-            
-            # Verify DB interactions
-            assert mock_db.add.called
-            assert mock_db.commit.called
+                campaign = await campaign_service.create_campaign(
+                    mock_db, mock_workspace, mock_user, campaign_data
+                )
+
+                assert campaign.name == "Test Campaign"
+                assert campaign.agent_id == mock_agent.id
+                assert campaign.agent_was_generated is True
+                assert campaign.agent_generation_failed is False
+                assert campaign.status == CampaignStatus.draft
+                
+                # Verify DB interactions
+                assert mock_db.add.called
+                assert mock_db.commit.called
 
 @pytest.mark.asyncio
 async def test_transition_to_live_validations(mock_workspace):

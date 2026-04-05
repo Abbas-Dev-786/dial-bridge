@@ -13,13 +13,14 @@ interface ImportContactsDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onImported?: (count: number) => void;
+  onImport?: (file: File) => void;
 }
 
 type Step = "upload" | "map" | "validate" | "confirm";
 
 const CSV_FIELDS = ["full_name", "phone", "email", "company", "notes"];
 
-export function ImportContactsDialog({ open, onOpenChange, onImported }: ImportContactsDialogProps) {
+export function ImportContactsDialog({ open, onOpenChange, onImported, onImport }: ImportContactsDialogProps) {
   const [step, setStep] = useState<Step>("upload");
   const [file, setFile] = useState<File | null>(null);
   const [mapping, setMapping] = useState<Record<string, string>>({
@@ -169,7 +170,11 @@ export function ImportContactsDialog({ open, onOpenChange, onImported }: ImportC
             </>
           )}
           {step === "confirm" && (
-            <Button onClick={() => { onImported?.(mockResults.imported); handleClose(false); }}>Done</Button>
+            <Button onClick={() => { 
+              if (file) onImport?.(file);
+              onImported?.(mockResults.imported); 
+              handleClose(false); 
+            }}>Done</Button>
           )}
         </DialogFooter>
       </DialogContent>

@@ -10,15 +10,20 @@ export function CampaignHeader() {
   const navigate = useNavigate();
   const { id } = useParams();
   const { toast } = useToast();
-  const { campaignStatus, handleStatusTransition, setActiveTab, setDialogState } = useCampaignStore();
+  const { activeCampaign, campaignStatus, transitionStatus, setDialogState } = useCampaignStore();
 
-  const campaign = CAMPAIGN_MOCK_DATA[id || "1"] || { name: `Campaign ${id}`, status: "draft" };
+  const campaign = activeCampaign || { name: `Loading...`, status: "draft" };
   const isDraft = campaignStatus === "draft";
   const availableTransitions = STATUS_TRANSITIONS[campaignStatus as keyof typeof STATUS_TRANSITIONS] || [];
 
-  const onTransition = (target: any) => {
-    handleStatusTransition(target);
-    toast({ title: "Status updated", description: `Campaign is now ${target}.` });
+  const onTransition = async (target: any) => {
+    if (!id) return;
+    try {
+      await transitionStatus(id, target);
+      toast({ title: "Status updated", description: `Campaign is now ${target}.` });
+    } catch (error) {
+      toast({ title: "Update failed", description: "Could not update status.", variant: "destructive" });
+    }
   };
 
   return (

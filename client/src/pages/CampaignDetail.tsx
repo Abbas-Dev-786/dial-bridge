@@ -1,3 +1,5 @@
+import { useEffect } from "react";
+import { useParams } from "react-router-dom";
 import { useCampaignStore } from "@/store/useCampaignStore";
 import { CampaignHeader } from "@/components/campaign-detail/CampaignHeader";
 import { CampaignTabsNav } from "@/components/campaign-detail/CampaignTabsNav";
@@ -20,7 +22,24 @@ import { AddContactDialog } from "@/components/dialogs/AddContactDialog";
 import { ImportContactsDialog } from "@/components/dialogs/ImportContactsDialog";
 
 export default function CampaignDetail() {
-  const { activeTab, dialogStates, setDialogState, selectedIntegration } = useCampaignStore();
+  const { id } = useParams();
+  const { 
+    activeTab, 
+    dialogStates, 
+    setDialogState, 
+    selectedIntegration, 
+    fetchCampaign,
+    addContact,
+    importContacts,
+    uploadKnowledgeFile,
+    addKnowledgeUrl
+  } = useCampaignStore();
+
+  useEffect(() => {
+    if (id) {
+      fetchCampaign(id);
+    }
+  }, [id, fetchCampaign]);
 
   const renderTab = () => {
     switch (activeTab) {
@@ -54,6 +73,8 @@ export default function CampaignDetail() {
       <UploadDocumentDialog 
         open={dialogStates.uploadDoc} 
         onOpenChange={(open) => setDialogState("uploadDoc", open)} 
+        onUploadFile={(file) => id && uploadKnowledgeFile(id, file)}
+        onAddUrl={(url) => id && addKnowledgeUrl(id, { url, name: url })}
       />
       <ConnectIntegrationDialog 
         open={dialogStates.connectIntegration} 
@@ -67,10 +88,12 @@ export default function CampaignDetail() {
       <AddContactDialog 
         open={dialogStates.addContact} 
         onOpenChange={(open) => setDialogState("addContact", open)} 
+        onAdd={(data) => id && addContact(id, data)}
       />
       <ImportContactsDialog 
         open={dialogStates.importContacts} 
         onOpenChange={(open) => setDialogState("importContacts", open)} 
+        onImport={(file) => id && importContacts(id, file)}
       />
       <ExportDataDialog 
         open={dialogStates.export} 

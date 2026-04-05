@@ -1,3 +1,4 @@
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { StatCard } from "@/components/shared/StatCard";
 import { StatusBadge } from "@/components/shared/StatusBadge";
@@ -11,53 +12,129 @@ import {
   Clock,
   DollarSign,
   ChevronRight,
+  Loader2,
 } from "lucide-react";
-import { RECENT_CONVERSATIONS } from "@/lib/mockData";
-import { useDashboardStore } from "@/store/useDashboardStore";
+import { workspaceRequest } from "@/lib/api";
 import { WelcomeBanner } from "@/components/dashboard/WelcomeBanner";
 import { OnboardingStepper } from "@/components/dashboard/OnboardingStepper";
 import { ActiveCampaignsGrid } from "@/components/dashboard/ActiveCampaignsGrid";
 import { QuickStats } from "@/components/dashboard/QuickStats";
 import { DashboardEmptyState } from "@/components/dashboard/DashboardEmptyState";
 
-const conversationColumns: Column<(typeof RECENT_CONVERSATIONS)[0]>[] = [
+interface AnalyticsOverview {
+  total_calls: number;
+  total_calls_delta_pct: number | null;
+  success_rate: number;
+  success_rate_delta_pct: number | null;
+  total_cost_cents: number;
+  total_cost_delta_pct: number | null;
+  contacts_called: number;
+  avg_duration_seconds: number | null;
+}
+
+interface Campaign {
+  id: string;
+  name: string;
+  status: string;
+  total_contacts: number;
+  processed_contacts: number;
+  success_count: number;
+  cost_cents: number;
+  agent_name: string | null;
+}
+
+interface CallListItem {
+  id: string;
+  contact_name: string | null;
+  contact_phone: string | null;
+  agent_name: string | null;
+  campaign_name: string | null;
+  status: string;
+  duration_seconds: number;
+  created_at: string;
+}
+
+const conversationColumns: Column<CallListItem>[] = [
   {
-    key: "contact",
+    key: "contact_phone",
     label: "Contact",
     sortable: true,
-    render: (r) => <span className="font-mono text-sm">{r.contact}</span>,
+    render: (r) => (
+      <div className="flex flex-col">
+        <span className="text-sm font-medium">{r.contact_name || "Unknown"}</span>
+        <span className="text-[10px] font-mono text-muted-foreground">{r.contact_phone}</span>
+      </div>
+    ),
   },
-  { key: "agent", label: "Agent", sortable: true, hideOnMobile: true },
+  { key: "agent_name", label: "Agent", sortable: true, hideOnMobile: true },
   {
-    key: "campaign",
+    key: "campaign_name",
     label: "Campaign",
     sortable: true,
     hideOnMobile: true,
     render: (r) => (
-      <Badge variant="secondary" className="text-xs font-normal">
-        {r.campaign}
+      <Badge variant="secondary" className="text-[10px] font-normal border-none bg-muted/50">
+        {r.campaign_name || "Direct Call"}
       </Badge>
     ),
   },
   {
-    key: "duration",
+    key: "duration_seconds",
     label: "Duration",
     sortable: true,
     hideOnMobile: true,
-    render: (r) => <span className="font-mono text-sm">{r.duration}</span>,
+    render: (r) => <span className="font-mono text-xs">{Math.floor(r.duration_seconds / 60)}m {r.duration_seconds % 60}s</span>,
   },
   {
     key: "status",
     label: "Status",
     render: (r) => <StatusBadge status={r.status} />,
   },
-  { key: "time", label: "Time", sortable: true, hideOnMobile: true },
+  { 
+    key: "created_at", 
+    label: "Time", 
+    sortable: true, 
+    hideOnMobile: true,
+    render: (r) => <span className="text-[10px] text-muted-foreground">{new Date(r.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+  },
 ];
 
 export default function Dashboard() {
   const navigate = useNavigate();
-  const { hasAgents, hasCampaigns } = useDashboardStore();
-  const isEmpty = !hasAgents && !hasCampaigns;
+  const [analytics, setAnalytics] = useState<AnalyticsOverview | null>(null);
+  const [activeCampaigns, setActiveCampaigns] = useState<Campaign[]>([]);
+  const [recentCalls, setRecentCalls] = useState<CallListItem[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const [analyticsRes, campaignsRes, callsRes] = await Promise.all([
+          workspaceRequest.get<{ overview: AnalyticsOverview }>("/analytics"),
+          workspaceRequest.get<Campaign[]>("/campaigns?status=live&status=paused"),
+          workspaceRequest.get<{ items: CallListItem[] }>("/calls", { params: { page_size: 6 } })
+        ]);
+        setAnalytics(analyticsRes.data.overview);
+        setActiveCampaigns(campaignsRes.data);
+        setRecentCalls(callsRes.data.items);
+      } catch (err) {
+        console.error("Failed to fetch dashboard data:", err);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    fetchData();
+  }, []);
+
+  if (isLoading) {
+    return (
+      <div className="flex min-h-[70vh] items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary/50" />
+      </div>
+    );
+  }
+
+  const isEmpty = (!analytics || analytics.total_calls === 0) && activeCampaigns.length === 0;
 
   if (isEmpty) {
     return <DashboardEmptyState />;
@@ -65,40 +142,52 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6">
-      <WelcomeBanner />
+      <WelcomeBanner activeCount={activeCampaigns.length} />
 
       <OnboardingStepper />
 
-      <ActiveCampaignsGrid />
+      <ActiveCampaignsGrid campaigns={activeCampaigns} />
 
       {/* ── Aggregated KPIs ── */}
       <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
         <StatCard
           label="Total Calls"
-          value="1,284"
-          trend={{ value: "12%", positive: true }}
+          value={analytics?.total_calls.toLocaleString() || "0"}
+          trend={(analytics?.total_calls_delta_pct !== null && analytics?.total_calls_delta_pct !== undefined) ? { 
+            value: `${Math.abs(analytics.total_calls_delta_pct).toFixed(1)}%`, 
+            positive: analytics.total_calls_delta_pct >= 0 
+          } : undefined}
           icon={<PhoneCall className="h-4 w-4" />}
         />
         <StatCard
-          label="Top Agent Success"
-          value="94.2%"
-          trend={{ value: "2.1%", positive: true }}
+          label="Success Rate"
+          value={`${(analytics?.success_rate || 0).toFixed(1)}%`}
+          trend={(analytics?.success_rate_delta_pct !== null && analytics?.success_rate_delta_pct !== undefined) ? { 
+            value: `${Math.abs(analytics.success_rate_delta_pct).toFixed(1)}%`, 
+            positive: analytics.success_rate_delta_pct >= 0 
+          } : undefined}
           icon={<TrendingUp className="h-4 w-4" />}
         />
         <StatCard
           label="Minutes Used"
-          value="4,320"
+          value={Math.round((analytics?.total_calls || 0) * (analytics?.avg_duration_seconds || 0) / 60).toLocaleString()}
           icon={<Clock className="h-4 w-4" />}
         >
-          <Progress value={43} className="mt-3 h-1.5" />
-          <p className="mt-1 text-xs text-muted-foreground">
-            4,320 / 10,000 min
-          </p>
+          <div className="mt-3">
+             <div className="flex justify-between text-[10px] text-muted-foreground mr-1 mb-1">
+                <span>Usage</span>
+                <span>{analytics?.contacts_called.toLocaleString() || "0"} contacts</span>
+             </div>
+             <Progress value={Math.min((analytics?.contacts_called || 0) / 5000 * 100, 100)} className="h-1.5" />
+          </div>
         </StatCard>
         <StatCard
           label="Total Cost"
-          value="$180.70"
-          trend={{ value: "8%", positive: false }}
+          value={`$${((analytics?.total_cost_cents || 0) / 100).toFixed(2)}`}
+          trend={(analytics?.total_cost_delta_pct !== null && analytics?.total_cost_delta_pct !== undefined) ? { 
+            value: `${Math.abs(analytics.total_cost_delta_pct).toFixed(1)}%`, 
+            positive: analytics.total_cost_delta_pct < 0 
+          } : undefined}
           icon={<DollarSign className="h-4 w-4" />}
         />
       </div>
@@ -107,25 +196,28 @@ export default function Dashboard() {
       <div className="grid gap-6 lg:grid-cols-5">
         <div className="lg:col-span-3">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold">Recent Conversations</h2>
+            <h2 className="text-lg font-semibold tracking-tight">Recent Conversations</h2>
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => navigate("/call-logs")}
-              className="text-muted-foreground"
+              onClick={() => navigate("/calls")}
+              className="text-muted-foreground text-xs hover:bg-transparent hover:text-foreground p-0 h-auto"
             >
-              View All <ChevronRight className="ml-1 h-4 w-4" />
+              View All <ChevronRight className="ml-1 h-3.5 w-3.5" />
             </Button>
           </div>
           <DataTable
             columns={conversationColumns}
-            data={RECENT_CONVERSATIONS}
-            searchKey="contact"
-            searchPlaceholder="Search conversations..."
+            data={recentCalls}
+            searchKey="contact_phone"
+            searchPlaceholder="Search calls..."
           />
         </div>
 
-        <QuickStats />
+        <QuickStats 
+          recentCalls={recentCalls} 
+          campaigns={activeCampaigns} 
+        />
       </div>
     </div>
   );

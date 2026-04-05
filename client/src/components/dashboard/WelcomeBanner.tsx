@@ -1,23 +1,26 @@
 import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
-import { useDashboardStore } from "@/store/useDashboardStore";
-import { ACTIVE_CAMPAIGNS } from "@/lib/mockData";
+import { useAuthStore } from "@/store/useAuthStore";
 
-export function WelcomeBanner() {
+interface WelcomeBannerProps {
+  activeCount: number;
+}
+
+export function WelcomeBanner({ activeCount }: WelcomeBannerProps) {
   const navigate = useNavigate();
-  const hasCampaigns = useDashboardStore((state) => state.hasCampaigns);
+  const { user } = useAuthStore();
 
   return (
     <div className="rounded-xl border bg-card p-6 shadow-sm">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">
-            Welcome back, Alex
+            Welcome back, {user?.full_name?.split(" ")[0] || "there"}
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            {hasCampaigns
-              ? `You have ${ACTIVE_CAMPAIGNS.length} active campaign${ACTIVE_CAMPAIGNS.length > 1 ? "s" : ""} running`
+            {activeCount > 0
+              ? `You have ${activeCount} active campaign${activeCount > 1 ? "s" : ""} running`
               : "Let's get your first campaign up and running"}
           </p>
         </div>

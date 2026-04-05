@@ -46,7 +46,7 @@ async def delete_workspace(workspace_id: UUID, member: WorkspaceMember = Depends
 async def list_members(workspace_id: UUID, member: WorkspaceMember = Depends(get_workspace_member), db: AsyncSession = Depends(get_db)):
     from sqlalchemy import select
     from app.models.workspace import WorkspaceMember as WMember
-    result = await db.execute(select(WMember).where(WMember.workspace_id == workspace_id, WMember.accepted_at.is_not(None)))
+    result = await db.execute(select(WMember).where(WMember.workspace_id == workspace_id))
     return list(result.scalars().all())
 
 @router.post("/{workspace_id}/members/invite", status_code=status.HTTP_201_CREATED)

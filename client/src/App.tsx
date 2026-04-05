@@ -32,6 +32,7 @@ import SettingsAPI from "@/pages/SettingsAPI";
 import SettingsNotifications from "@/pages/SettingsNotifications";
 import NotFound from "@/pages/NotFound";
 import LandingPage from "@/pages/LandingPage";
+import { SettingsLayout } from "@/components/settings/SettingsLayout";
 
 import { AuthProvider } from "@/components/AuthProvider";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
@@ -75,12 +76,12 @@ const App = () => (
                 <Route path="/knowledge" element={<KnowledgeBase />} />
                 <Route path="/integrations" element={<Integrations />} />
                 <Route path="/integrations/webhooks" element={<WebhookLogs />} />
-                <Route path="/settings" element={<GeneralSettings />} />
-                <Route path="/settings/team" element={<SettingsTeam />} />
-                <Route path="/settings/billing" element={<SettingsBilling />} />
-                <Route path="/settings/api" element={<SettingsAPI />} />
-                <Route path="/settings/notifications" element={<SettingsNotifications />} />
-                <Route path="/settings/audit-logs" element={<AuditLogs />} />
+                
+                {/* Settings with shared layout */}
+                <Route element={<SettingsLayout />}>
+                  <Route path="/settings" element={<GeneralSettings />} />
+                  <Route path="/settings/team" element={<SettingsTeam />} />
+                </Route>
               </Route>
 
               <Route path="*" element={<NotFound />} />

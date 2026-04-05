@@ -1,16 +1,46 @@
+import { useState } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { UserPlus } from "lucide-react";
+import { UserPlus, Loader2 } from "lucide-react";
+import { workspaceRequest } from "@/lib/api";
+import { toast } from "sonner";
 
 interface InviteTeamMemberDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onSuccess?: () => void;
 }
 
-export function InviteTeamMemberDialog({ open, onOpenChange }: InviteTeamMemberDialogProps) {
+export function InviteTeamMemberDialog({ open, onOpenChange, onSuccess }: InviteTeamMemberDialogProps) {
+  const [email, setEmail] = useState("");
+  const [role, setRole] = useState("viewer");
+  const [isInviting, setIsInviting] = useState(false);
+
+  const handleInvite = async () => {
+    if (!email) {
+      toast.error("Please enter an email address");
+      return;
+    }
+    
+    setIsInviting(true);
+    try {
+      await workspaceRequest.post("/members/invite", { email, role });
+      toast.success("Invitation sent successfully");
+      setEmail("");
+      setRole("viewer");
+      onSuccess?.();
+      onOpenChange(false);
+    } catch (err: any) {
+      console.error(err);
+      toast.error(err.response?.data?.detail || "Failed to send invitation");
+    } finally {
+      setIsInviting(false);
+    }
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
@@ -22,14 +52,20 @@ export function InviteTeamMemberDialog({ open, onOpenChange }: InviteTeamMemberD
           <DialogDescription className="text-center">Send an invitation to collaborate on your workspace.</DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4">
+        <div className="space-y-4 py-2">
           <div className="space-y-2">
             <Label>Email Address</Label>
-            <Input placeholder="colleague@company.com" type="email" />
+            <Input 
+              placeholder="colleague@company.com" 
+              type="email" 
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              disabled={isInviting}
+            />
           </div>
           <div className="space-y-2">
             <Label>Role</Label>
-            <Select defaultValue="editor">
+            <Select value={role} onValueChange={setRole} disabled={isInviting}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="admin">Admin — Full access</SelectItem>
@@ -38,15 +74,13 @@ export function InviteTeamMemberDialog({ open, onOpenChange }: InviteTeamMemberD
               </SelectContent>
             </Select>
           </div>
-          <div className="space-y-2">
-            <Label>Personal Message <span className="text-muted-foreground font-normal">(optional)</span></Label>
-            <Input placeholder="Hey, join our workspace!" />
-          </div>
         </div>
 
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button onClick={() => onOpenChange(false)}>Send Invitation</Button>
+        <DialogFooter className="mt-4">
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isInviting}>Cancel</Button>
+          <Button onClick={handleInvite} disabled={isInviting}>
+            {isInviting ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Sending...</> : "Send Invitation"}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

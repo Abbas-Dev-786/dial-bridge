@@ -53,7 +53,6 @@ const navGroups = [
     label: "Settings",
     items: [
       { title: "Settings", url: "/settings", icon: Settings },
-      { title: "Audit Logs", url: "/settings/audit-logs", icon: ScrollText },
     ],
   },
 ];

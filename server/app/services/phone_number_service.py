@@ -46,12 +46,17 @@ async def list_elevenlabs_available_numbers(db: AsyncSession, workspace_id: UUID
     
     available = []
     for el in el_numbers:
-        el_id = el["phone_number_id"]
+        el_id = el.get("phone_number_id") or el.get("id")
+        number = el.get("phone_number") or el.get("number")
+        
+        if not el_id or not number:
+            continue
+            
         available.append(ElevenLabsAvailableNumber(
             elevenlabs_number_id=el_id,
-            number=el["phone_number"],
+            number=number,
             label=el.get("label"),
-            assigned_agent_id=el.get("assigned_agent"),
+            assigned_agent_id=el.get("assigned_agent_id") or el.get("assigned_agent"),
             is_imported=el_id in imported_by_this_workspace,
             is_unavailable=el_id in imported_by_other_workspace
         ))
@@ -62,15 +67,21 @@ async def import_from_elevenlabs(db: AsyncSession, workspace: Workspace, data: P
     async with ElevenLabsClient() as client:
         el_data = await client.get_phone_number(data.elevenlabs_number_id)
     
+    el_id = el_data.get("phone_number_id") or el_data.get("id") or data.elevenlabs_number_id
+    el_number = el_data.get("phone_number") or el_data.get("number")
+    
+    if not el_number:
+        raise ValidationError("Could not retrieve number from ElevenLabs.")
+    
     # Check if already imported
     stmt = select(PhoneNumber).where(
         PhoneNumber.workspace_id == workspace.id,
-        PhoneNumber.elevenlabs_number_id == data.elevenlabs_number_id,
+        PhoneNumber.elevenlabs_number_id == el_id,
         PhoneNumber.status != PhoneNumberStatus.released
     )
     result = await db.execute(stmt)
     if result.scalar_one_or_none():
-        raise ConflictError(f"Phone number {el_data['phone_number']} is already imported.")
+        raise ConflictError(f"Phone number {el_number} is already imported.")
     
     # Map EL type to our enum if needed
     num_type = PhoneNumberType.local
@@ -78,7 +89,7 @@ async def import_from_elevenlabs(db: AsyncSession, workspace: Workspace, data: P
     
     phone_number = PhoneNumber(
         workspace_id=workspace.id,
-        number=el_data["phone_number"],
+        number=el_number,
         friendly_name=data.friendly_name or el_data.get("label"),
         provider=PhoneProvider.elevenlabs,
         elevenlabs_number_id=data.elevenlabs_number_id,

@@ -1,44 +1,97 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { DataTable, Column } from "@/components/shared/DataTable";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Phone, Plus, Download } from "lucide-react";
+import { Phone, Plus, Download, Loader2 } from "lucide-react";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ImportSIPDialog } from "@/components/dialogs/ImportSIPDialog";
 import { ImportElevenLabsNumberDialog } from "@/components/dialogs/ImportElevenLabsNumberDialog";
 import { useToast } from "@/hooks/use-toast";
+import { workspaceRequest } from "@/lib/api";
 
-const numbers = [
-  { id: "1", number: "+1 (555) 100-2000", label: "Primary Outbound", provider: "ElevenLabs", campaign: "Q1 Outreach", status: "live" as const, type: "Local", calls: 642 },
-  { id: "2", number: "+1 (555) 200-3000", label: "Backup Line", provider: "ElevenLabs", campaign: "Q1 Outreach", status: "live" as const, type: "Local", calls: 200 },
-  { id: "3", number: "+1 (555) 300-4000", label: "Support Line", provider: "Twilio", campaign: "—", status: "live" as const, type: "Toll-free", calls: 156 },
-  { id: "4", number: "+1 (800) 400-5000", label: "SIP Trunk", provider: "SIP", campaign: "—", status: "paused" as const, type: "SIP", calls: 0 },
-];
+interface PhoneNumberListItem {
+  id: string;
+  number: string;
+  friendly_name: string | null;
+  provider: string;
+  active_campaign_name: string | null;
+  number_type: string;
+  calls_made: number;
+  status: any;
+}
 
-const columns: Column<typeof numbers[0]>[] = [
-  { key: "number", label: "Number", render: (r) => <span className="font-mono text-sm font-medium">{r.number}</span> },
-  { key: "label", label: "Label" },
-  { key: "provider", label: "Provider", hideOnMobile: true, render: (r) => (
-    <Badge variant="secondary" className="text-xs font-normal">{r.provider}</Badge>
-  )},
-  { key: "campaign", label: "Assigned Campaign", hideOnMobile: true, render: (r) => (
-    r.campaign !== "—"
-      ? <Badge variant="default" className="text-xs font-normal bg-success/10 text-success border-0">Active · {r.campaign}</Badge>
-      : <span className="text-sm text-muted-foreground">Available</span>
-  )},
-  { key: "type", label: "Type", hideOnMobile: true, render: (r) => <Badge variant="secondary">{r.type}</Badge> },
-  { key: "calls", label: "Calls", hideOnMobile: true, sortable: true },
+const columns: Column<PhoneNumberListItem>[] = [
+  { 
+    key: "number", 
+    label: "Number", 
+    render: (r) => <span className="font-mono text-sm font-medium">{r.number}</span> 
+  },
+  { 
+    key: "friendly_name", 
+    label: "Label",
+    render: (r) => <span>{r.friendly_name || "—"}</span>
+  },
+  { 
+    key: "provider", 
+    label: "Provider", 
+    hideOnMobile: true, 
+    render: (r) => (
+      <Badge variant="secondary" className="text-xs font-normal capitalize">
+        {r.provider.replace("_", " ")}
+      </Badge>
+    )
+  },
+  { 
+    key: "active_campaign_name", 
+    label: "Assigned Campaign", 
+    hideOnMobile: true, 
+    render: (r) => (
+      r.active_campaign_name
+        ? <Badge variant="default" className="text-xs font-normal bg-success/10 text-success border-0">Active · {r.active_campaign_name}</Badge>
+        : <span className="text-sm text-muted-foreground">Available</span>
+    )
+  },
+  { 
+    key: "number_type", 
+    label: "Type", 
+    hideOnMobile: true, 
+    render: (r) => <Badge variant="secondary" className="capitalize">{r.number_type.replace("_", " ")}</Badge> 
+  },
+  { key: "calls_made", label: "Calls", hideOnMobile: true, sortable: true },
   { key: "status", label: "Status", render: (r) => <StatusBadge status={r.status} /> },
 ];
 
 export default function PhoneNumbers() {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const [numbers, setNumbers] = useState<PhoneNumberListItem[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [sipDialogOpen, setSipDialogOpen] = useState(false);
   const [elDialogOpen, setElDialogOpen] = useState(false);
+
+  const fetchNumbers = async () => {
+    setIsLoading(true);
+    try {
+      const res = await workspaceRequest.get<PhoneNumberListItem[]>("/phone-numbers");
+      setNumbers(res.data);
+    } catch (error) {
+      console.error("Failed to fetch phone numbers", error);
+      toast({
+        title: "Error",
+        description: "Failed to load phone numbers. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchNumbers();
+  }, []);
 
   return (
     <div className="space-y-6">
@@ -69,7 +122,11 @@ export default function PhoneNumbers() {
         </TabsList>
 
         <TabsContent value="all" className="mt-4">
-          {numbers.length > 0 ? (
+          {isLoading ? (
+            <div className="h-[200px] flex items-center justify-center border rounded-xl bg-card shadow-sm">
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : numbers.length > 0 ? (
             <DataTable columns={columns} data={numbers} searchKey="number" searchPlaceholder="Search numbers..." />
           ) : (
             <EmptyState icon={Phone} title="No phone numbers" description="Import from ElevenLabs, Twilio, or connect a SIP trunk to get started." actionLabel="Import from ElevenLabs" onAction={() => setElDialogOpen(true)} />
@@ -77,15 +134,15 @@ export default function PhoneNumbers() {
         </TabsContent>
 
         <TabsContent value="elevenlabs" className="mt-4">
-          <DataTable columns={columns} data={numbers.filter((n) => n.provider === "ElevenLabs")} searchKey="number" searchPlaceholder="Search ElevenLabs numbers..." />
+          <DataTable columns={columns} data={numbers.filter((n) => n.provider === "elevenlabs")} searchKey="number" searchPlaceholder="Search ElevenLabs numbers..." />
         </TabsContent>
 
         <TabsContent value="twilio" className="mt-4">
-          <DataTable columns={columns} data={numbers.filter((n) => n.provider === "Twilio")} searchKey="number" searchPlaceholder="Search Twilio numbers..." />
+          <DataTable columns={columns} data={numbers.filter((n) => n.provider === "twilio")} searchKey="number" searchPlaceholder="Search Twilio numbers..." />
         </TabsContent>
 
         <TabsContent value="sip" className="mt-4">
-          <DataTable columns={columns} data={numbers.filter((n) => n.provider === "SIP")} searchKey="number" searchPlaceholder="Search SIP trunks..." />
+          <DataTable columns={columns} data={numbers.filter((n) => n.provider === "sip_trunk")} searchKey="number" searchPlaceholder="Search SIP trunks..." />
         </TabsContent>
       </Tabs>
 
@@ -93,7 +150,10 @@ export default function PhoneNumbers() {
       <ImportElevenLabsNumberDialog
         open={elDialogOpen}
         onOpenChange={setElDialogOpen}
-        onImported={(count) => toast({ title: "Numbers imported", description: `${count} phone number${count !== 1 ? "s" : ""} imported from ElevenLabs.` })}
+        onImported={(count) => {
+          toast({ title: "Numbers imported", description: `${count} phone number${count !== 1 ? "s" : ""} imported from ElevenLabs.` });
+          fetchNumbers();
+        }}
       />
     </div>
   );

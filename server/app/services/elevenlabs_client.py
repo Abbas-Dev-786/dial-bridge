@@ -55,9 +55,9 @@ class ElevenLabsClient:
 
     async def list_voices(self) -> list[dict]:
         """GET /voices — returns list of available voices for this API key"""
-        data = await self._request("GET", "/v1/voices") # ElevenLabs voices endpoint is /v1/voices or /voices depending on base url
-        # If base_url ends with /v1, we use /voices. Our base_url is /v1, so we use /voices.
-        # Wait, the prompt says GET /voices. Let's stick to that.
+        data = await self._request("GET", "/v1/voices")
+        if isinstance(data, list):
+            return data
         return data.get("voices", [])
 
     # ── Knowledge base endpoints ──────────────────────────────────────
@@ -115,6 +115,8 @@ class ElevenLabsClient:
         Returns list of documents currently on the EL agent.
         """
         data = await self._request("GET", f"/convai/agents/{agent_id}/knowledge-base")
+        if isinstance(data, list):
+            return data
         return data.get("documents", [])
 
     # ── Telephony endpoints ─────────────────
@@ -125,6 +127,8 @@ class ElevenLabsClient:
         Returns all phone numbers on the ElevenLabs account for this API key.
         """
         data = await self._request("GET", "/convai/phone-numbers")
+        if isinstance(data, list):
+            return data
         return data.get("phone_numbers", [])
 
     async def get_phone_number(self, phone_number_id: str) -> dict:

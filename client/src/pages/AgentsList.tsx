@@ -1,41 +1,127 @@
 import { useNavigate } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import { DataTable, Column } from "@/components/shared/DataTable";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { Badge } from "@/components/ui/badge";
-import { Bot } from "lucide-react";
+import { Bot, Loader2, AlertCircle } from "lucide-react";
 import { EmptyState } from "@/components/shared/EmptyState";
+import { useWorkspaceStore } from "@/store/useWorkspaceStore";
+import api from "@/lib/api";
+import { Button } from "@/components/ui/button";
 
-const agents = [
-  { id: "1", name: "Sales Bot Pro", status: "live" as const, model: "GPT-4o", voice: "Rachel", activeCampaign: "Q1 Outreach" as string | null },
-  { id: "2", name: "Support AI", status: "live" as const, model: "Claude 3.5 Sonnet", voice: "Adam", activeCampaign: null },
-  { id: "3", name: "Outreach Pro", status: "paused" as const, model: "GPT-4o Mini", voice: "Bella", activeCampaign: null },
-  { id: "4", name: "Follow-up Agent", status: "live" as const, model: "GPT-4o", voice: "Antoni", activeCampaign: "Re-engagement" as string | null },
-  { id: "5", name: "Survey Agent", status: "draft" as const, model: "Gemini 1.5 Flash", voice: "Elli", activeCampaign: null },
-];
-
-const columns: Column<typeof agents[0]>[] = [
-  { key: "name", label: "Agent Name", sortable: true, render: (r) => <span className="font-medium">{r.name}</span> },
-  { key: "model", label: "Model", sortable: true, hideOnMobile: true, render: (r) => (
-    <Badge variant="secondary" className="text-xs font-normal">{r.model}</Badge>
-  )},
-  { key: "voice", label: "Voice", sortable: true, hideOnMobile: true },
-  { key: "status", label: "Status", render: (r) => <StatusBadge status={r.status} /> },
-  { key: "activeCampaign", label: "Assignment", hideOnMobile: true, render: (r) => (
-    r.activeCampaign
-      ? <Badge variant="default" className="text-xs font-normal bg-primary/10 text-primary border-0">Active in {r.activeCampaign}</Badge>
-      : <span className="text-sm text-muted-foreground">Available</span>
-  )},
-];
+interface AgentListItem {
+  id: string;
+  name: string;
+  status: "draft" | "live" | "paused" | "archived";
+  llm_model: string;
+  total_calls: number;
+  success_rate: number | null;
+  active_campaign_id: string | null;
+  active_campaign_name: string | null;
+  created_at: string;
+}
 
 export default function AgentsList() {
   const navigate = useNavigate();
+  const { activeWorkspaceId } = useWorkspaceStore();
+
+  const { data: agents = [], isLoading, isError, error, refetch } = useQuery({
+    queryKey: ["agents", activeWorkspaceId],
+    queryFn: async () => {
+      if (!activeWorkspaceId) return [];
+      const response = await api.get(`/api/v1/workspaces/${activeWorkspaceId}/agents`);
+      return response.data as AgentListItem[];
+    },
+    enabled: !!activeWorkspaceId,
+  });
+
+  const columns: Column<AgentListItem>[] = [
+    { 
+      key: "name", 
+      label: "Agent Name", 
+      sortable: true, 
+      render: (r) => <span className="font-medium">{r.name}</span> 
+    },
+    { 
+      key: "llm_model", 
+      label: "Model", 
+      sortable: true, 
+      hideOnMobile: true, 
+      render: (r) => (
+        <Badge variant="secondary" className="text-[10px] font-medium uppercase tracking-tight">
+          {r.llm_model}
+        </Badge>
+      )
+    },
+    { 
+      key: "status", 
+      label: "Status", 
+      render: (r) => <StatusBadge status={r.status} /> 
+    },
+    { 
+      key: "assignment", 
+      label: "Assignment", 
+      hideOnMobile: true, 
+      render: (r) => (
+        r.active_campaign_name
+          ? <Badge variant="outline" className="text-[10px] font-medium bg-primary/5 text-primary border-primary/20">
+              Active in {r.active_campaign_name}
+            </Badge>
+          : <span className="text-xs text-muted-foreground italic">Available</span>
+      )
+    },
+    { 
+      key: "total_calls", 
+      label: "Total Calls", 
+      sortable: true, 
+      hideOnMobile: true, 
+      render: (r) => <span className="text-sm">{r.total_calls}</span> 
+    },
+    { 
+      key: "success_rate", 
+      label: "Success", 
+      sortable: true, 
+      hideOnMobile: true, 
+      render: (r) => (
+        <span className="text-sm font-medium">
+          {r.success_rate !== null ? `${Math.round(r.success_rate)}%` : "—"}
+        </span>
+      )
+    },
+  ];
+
+  if (isLoading) {
+    return (
+      <div className="flex h-[400px] flex-col items-center justify-center gap-4 text-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <p className="text-sm text-muted-foreground">Fetching your agents...</p>
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <div className="flex h-[400px] flex-col items-center justify-center gap-4 text-center">
+        <div className="rounded-full bg-destructive/10 p-3">
+          <AlertCircle className="h-6 w-6 text-destructive" />
+        </div>
+        <div>
+          <h3 className="text-lg font-semibold tracking-tight">Failed to load agents</h3>
+          <p className="text-sm text-muted-foreground">{(error as any)?.response?.data?.detail || "An unexpected error occurred."}</p>
+        </div>
+        <Button variant="outline" onClick={() => refetch()}>Try Again</Button>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Agents</h1>
-          <p className="text-sm text-muted-foreground">Agent configurations & templates. Agents are workspace-level assets — assign them to campaigns.</p>
+          <p className="text-sm text-muted-foreground">
+            Manage your AI calling agents. Agents are generated from campaign goals.
+          </p>
         </div>
       </div>
 
@@ -51,8 +137,8 @@ export default function AgentsList() {
         <EmptyState
           icon={Bot}
           title="No agents yet"
-          description="Create agents within a campaign to get started."
-          actionLabel="Go to Campaigns"
+          description="Agents are automatically generated when you create a new campaign."
+          actionLabel="Create Campaign"
           onAction={() => navigate("/campaigns")}
         />
       )}

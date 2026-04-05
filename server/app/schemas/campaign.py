@@ -2,6 +2,7 @@ from uuid import UUID
 from datetime import datetime, date
 from pydantic import BaseModel, ConfigDict, Field
 from app.enums import CampaignStatus, KBSyncStatus, RetryOnOutcome
+from app.schemas.agent import AgentResponse
 
 class CampaignCreate(BaseModel):
     """
@@ -88,6 +89,7 @@ class CampaignResponse(BaseModel):
     status: CampaignStatus
     agent_id: UUID | None
     agent_name: str | None = None
+    agent: AgentResponse | None = None
     agent_generation: AgentGenerationPreview | None = None
     phone_number_id: UUID | None
     phone_number: str | None = None
@@ -122,6 +124,7 @@ class CampaignListItem(BaseModel):
     status: CampaignStatus
     agent_name: str | None = None
     agent_was_generated: bool
+    agent_generation_failed: bool
     contacts_total: int
     contacts_called: int
     calls_successful: int

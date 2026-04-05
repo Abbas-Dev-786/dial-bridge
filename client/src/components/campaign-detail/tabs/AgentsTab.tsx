@@ -56,7 +56,7 @@ export function AgentsTab() {
               <div className="rounded-lg bg-primary/10 p-2.5"><Bot className="h-5 w-5 text-primary" /></div>
               <div>
                 <p className="font-semibold">{agent.name}</p>
-                <p className="text-xs text-muted-foreground">{agent.model_id} · {agent.voice_id}</p>
+                <p className="text-xs text-muted-foreground">{agent.llm_model} · {agent.voice_config?.voice_id || agent.voice_id}</p>
               </div>
             </div>
             <StatusBadge status={agent.status || "ready"} />
@@ -76,7 +76,7 @@ export function AgentsTab() {
               <p className="text-xs text-muted-foreground">Success Rate</p>
             </div>
             <div>
-              <p className="text-xl font-bold truncate px-1" title={agent.model_id}>{agent.model_id.split("-")[0]}</p>
+              <p className="text-xl font-bold truncate px-1" title={agent.llm_model}>{agent.llm_model.split("-")[0]}</p>
               <p className="text-xs text-muted-foreground">Model</p>
             </div>
           </div>

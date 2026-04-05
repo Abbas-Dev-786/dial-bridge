@@ -21,6 +21,7 @@ interface CampaignListItem {
   status: "draft" | "scheduled" | "live" | "paused" | "completed" | "archived";
   agent_name: string | null;
   agent_was_generated: boolean;
+  agent_generation_failed: boolean;
   contacts_total: number;
   contacts_called: number;
   calls_successful: number;
@@ -80,11 +81,11 @@ export default function CampaignsList() {
       label: "Agent", 
       sortable: true, 
       hideOnMobile: true,
-      render: (r) => (
-        <span className={cn("text-sm", !r.agent_name && "text-muted-foreground italic")}>
-          {r.agent_name || "Generation pending..."}
-        </span>
-      )
+      render: (r) => {
+        if (r.agent_name) return <span className="text-sm font-medium">{r.agent_name}</span>;
+        if (r.agent_generation_failed) return <span className="text-xs text-destructive italic flex items-center gap-1"><AlertCircle className="h-3 w-3" /> Generation failed</span>;
+        return <span className="text-sm text-muted-foreground italic">Generation pending...</span>;
+      }
     },
     { 
       key: "status", 

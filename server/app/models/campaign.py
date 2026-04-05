@@ -83,6 +83,11 @@ class Campaign(AppBase):
     # Agent generation metadata
     agent_was_generated: Mapped[bool] = mapped_column(Boolean, default=False)
     agent_generation_failed: Mapped[bool] = mapped_column(Boolean, default=False)
+    
+    @property
+    def agent_name(self) -> str | None:
+        """Helper for API response mapping."""
+        return self.agent.name if self.agent else None
 
     # Relationships
     workspace: Mapped["Workspace"] = relationship(back_populates="campaigns")

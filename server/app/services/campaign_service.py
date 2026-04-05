@@ -19,6 +19,7 @@ from app.schemas.campaign import (
     AgentGenerationPreview,
     CampaignResponse
 )
+from app.schemas.agent import AgentResponse
 from app.enums import (
     CampaignStatus, 
     KBSyncStatus, 
@@ -108,6 +109,7 @@ async def get_campaign(db: AsyncSession, workspace_id: uuid.UUID, campaign_id: u
         .options(
             joinedload(Campaign.agent).selectinload(Agent.tools),
             joinedload(Campaign.agent).selectinload(Agent.voice_config),
+            joinedload(Campaign.agent).selectinload(Agent.conversation_config),
             joinedload(Campaign.phone_number)
         )
         .where(
@@ -435,6 +437,7 @@ def build_campaign_response(campaign: Campaign) -> CampaignResponse:
         status=campaign.status,
         agent_id=campaign.agent_id,
         agent_name=campaign.agent.name if campaign.agent else None,
+        agent=AgentResponse.model_validate(campaign.agent) if campaign.agent else None,
         agent_generation=agent_gen,
         phone_number_id=campaign.phone_number_id,
         phone_number=campaign.phone_number.number if campaign.phone_number else None,

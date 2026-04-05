@@ -9,6 +9,7 @@ import {
   Settings,
   Bot,
   ScrollText,
+  History as HistoryIcon,
 } from "lucide-react";
 import { NavLink } from "@/components/shared/NavLink";
 import {
@@ -48,6 +49,7 @@ const navGroups = [
       { title: "Knowledge Base", url: "/knowledge", icon: BookOpen },
       { title: "Integrations", url: "/integrations", icon: Puzzle },
       { title: "Webhook Logs", url: "/integrations/webhooks", icon: ScrollText },
+      { title: "Audit Logs", url: "/audit-logs", icon: HistoryIcon },
     ],
   },
   {

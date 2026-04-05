@@ -76,6 +76,7 @@ const App = () => (
                 <Route path="/knowledge" element={<KnowledgeBase />} />
                 <Route path="/integrations" element={<Integrations />} />
                 <Route path="/integrations/webhooks" element={<WebhookLogs />} />
+                <Route path="/audit-logs" element={<AuditLogs />} />
                 
                 {/* Settings with shared layout */}
                 <Route element={<SettingsLayout />}>

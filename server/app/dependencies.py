@@ -75,11 +75,13 @@ async def get_workspace_member(
     Raises ForbiddenError if not a member.
     """
     result = await db.execute(
-        select(WorkspaceMember).where(
+        select(WorkspaceMember)
+        .where(
             WorkspaceMember.workspace_id == workspace_id,
             WorkspaceMember.user_id == current_user.id,
             WorkspaceMember.accepted_at.is_not(None),
         )
+        .options(joinedload(WorkspaceMember.workspace))
     )
     member = result.scalar_one_or_none()
     if not member:

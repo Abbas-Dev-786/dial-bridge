@@ -222,6 +222,7 @@ async def update_agent(db: AsyncSession, workspace: Workspace, agent: Agent, dat
     )
     
     await db.commit()
+    await db.refresh(agent)
     return agent
 
 async def update_voice_config(db: AsyncSession, workspace: Workspace, agent: Agent, data: VoiceConfigCreate) -> AgentVoiceConfig:
@@ -245,6 +246,7 @@ async def update_voice_config(db: AsyncSession, workspace: Workspace, agent: Age
         await client.update_agent(agent.elevenlabs_agent_id, payload)
     
     await db.commit()
+    await db.refresh(agent.voice_config)
     return agent.voice_config
 
 async def update_conversation_config(db: AsyncSession, workspace: Workspace, agent: Agent, data: ConversationConfigCreate) -> AgentConversationConfig:
@@ -268,6 +270,7 @@ async def update_conversation_config(db: AsyncSession, workspace: Workspace, age
         await client.update_agent(agent.elevenlabs_agent_id, payload)
     
     await db.commit()
+    await db.refresh(agent.conversation_config)
     return agent.conversation_config
 
 async def add_tool(db: AsyncSession, workspace: Workspace, agent: Agent, data: AgentToolCreate) -> AgentTool:
@@ -294,6 +297,7 @@ async def add_tool(db: AsyncSession, workspace: Workspace, agent: Agent, data: A
         await client.update_agent(agent.elevenlabs_agent_id, payload)
     
     await db.commit()
+    await db.refresh(tool)
     return tool
 
 async def update_tool(db: AsyncSession, workspace: Workspace, agent: Agent, tool_id: UUID, data: AgentToolCreate) -> AgentTool:
@@ -322,6 +326,7 @@ async def update_tool(db: AsyncSession, workspace: Workspace, agent: Agent, tool
         await client.update_agent(agent.elevenlabs_agent_id, payload)
     
     await db.commit()
+    await db.refresh(tool)
     return tool
 
 async def delete_tool(db: AsyncSession, workspace: Workspace, agent: Agent, tool_id: UUID) -> None:

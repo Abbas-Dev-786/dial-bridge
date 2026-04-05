@@ -13,9 +13,18 @@ interface AgentConfigCardProps {
   temperature: number;
   maxTokens: number;
   prompt: string;
+  onChange: (field: string, value: any) => void;
 }
 
-export function AgentConfigCard({ isActive, name, model, temperature, maxTokens, prompt }: AgentConfigCardProps) {
+export function AgentConfigCard({ 
+  isActive, 
+  name, 
+  model, 
+  temperature, 
+  maxTokens, 
+  prompt,
+  onChange
+}: AgentConfigCardProps) {
   return (
     <Card>
       <CardHeader>
@@ -26,11 +35,19 @@ export function AgentConfigCard({ isActive, name, model, temperature, maxTokens,
         <div className="grid gap-6 sm:grid-cols-2">
           <div className="space-y-2">
             <Label>Agent Name</Label>
-            <Input defaultValue={name} disabled={isActive} />
+            <Input 
+              value={name} 
+              disabled={isActive} 
+              onChange={(e) => onChange("name", e.target.value)}
+            />
           </div>
           <div className="space-y-2">
             <Label>LLM Model</Label>
-            <Select defaultValue={model} disabled={isActive}>
+            <Select 
+              value={model} 
+              disabled={isActive} 
+              onValueChange={(v) => onChange("llm_model", v)}
+            >
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 {LLM_MODELS.map((m) => (
@@ -43,18 +60,32 @@ export function AgentConfigCard({ isActive, name, model, temperature, maxTokens,
         <div className="grid gap-6 sm:grid-cols-2 mt-6">
           <div className="space-y-2">
             <Label>Temperature</Label>
-            <Input type="number" step="0.1" min="0" max="2" defaultValue={temperature} disabled={isActive} />
+            <Input 
+              type="number" 
+              step="0.1" 
+              min="0" 
+              max="2" 
+              value={temperature} 
+              disabled={isActive} 
+              onChange={(e) => onChange("temperature", parseFloat(e.target.value))}
+            />
           </div>
           <div className="space-y-2">
             <Label>Max Tokens</Label>
-            <Input type="number" defaultValue={maxTokens} disabled={isActive} />
+            <Input 
+              type="number" 
+              value={maxTokens} 
+              disabled={isActive} 
+              onChange={(e) => onChange("max_tokens", parseInt(e.target.value))}
+            />
           </div>
         </div>
         <div className="space-y-2 mt-6">
           <Label>System Prompt</Label>
           <Textarea
-            defaultValue={prompt}
-            className="min-h-[150px] font-mono text-sm leading-relaxed"
+            value={prompt}
+            onChange={(e) => onChange("system_prompt", e.target.value)}
+            className="min-h-[200px] font-mono text-sm leading-relaxed"
             readOnly={isActive}
           />
         </div>

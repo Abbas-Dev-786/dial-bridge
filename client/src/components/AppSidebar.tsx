@@ -47,6 +47,7 @@ const navGroups = [
       },
       { title: "Knowledge Base", url: "/knowledge", icon: BookOpen },
       { title: "Integrations", url: "/integrations", icon: Puzzle },
+      { title: "Webhook Logs", url: "/integrations/webhooks", icon: ScrollText },
     ],
   },
   {

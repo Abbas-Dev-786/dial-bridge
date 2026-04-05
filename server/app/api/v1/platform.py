@@ -74,6 +74,64 @@ async def revoke_api_key(
 
 # --- Webhook Endpoints ---
 
+# --- Webhook Management (New Unified Paths) ---
+
+@router.get("/{workspace_id}/webhooks/endpoints", response_model=list[WebhookEndpointResponse])
+async def list_webhooks_endpoints_v2(
+    workspace_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    member: WorkspaceMember = Depends(require_role(WorkspaceRole.owner, WorkspaceRole.admin)),
+):
+    return await platform_service.list_webhook_endpoints(db, workspace_id)
+
+@router.post("/{workspace_id}/webhooks/endpoints", response_model=WebhookEndpointResponse, status_code=status.HTTP_201_CREATED)
+async def create_webhook_endpoint_v2(
+    workspace_id: UUID,
+    data: WebhookEndpointCreate,
+    db: AsyncSession = Depends(get_db),
+    member: WorkspaceMember = Depends(require_role(WorkspaceRole.owner, WorkspaceRole.admin)),
+):
+    endpoint = await platform_service.create_webhook_endpoint(db, workspace_id, data)
+    await log_action(db, workspace_id, "webhook_endpoint.created", "webhook_endpoint", endpoint.id, actor_user_id=member.user_id)
+    await db.commit()
+    return endpoint
+
+@router.delete("/{workspace_id}/webhooks/endpoints/{endpoint_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_webhook_endpoint_v2(
+    workspace_id: UUID,
+    endpoint_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    member: WorkspaceMember = Depends(require_role(WorkspaceRole.owner, WorkspaceRole.admin)),
+):
+    endpoint = await platform_service.get_webhook_endpoint(db, workspace_id, endpoint_id)
+    await platform_service.delete_webhook_endpoint(db, endpoint)
+    await log_action(db, workspace_id, "webhook_endpoint.deleted", "webhook_endpoint", endpoint_id, actor_user_id=member.user_id)
+    await db.commit()
+
+@router.get("/{workspace_id}/webhooks/deliveries", response_model=list[WebhookDeliveryResponse])
+async def list_workspace_webhook_deliveries(
+    workspace_id: UUID,
+    status: WebhookDeliveryStatus | None = Query(None),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
+    member: WorkspaceMember = Depends(require_role(WorkspaceRole.owner, WorkspaceRole.admin)),
+):
+    """Global delivery logs for the entire workspace."""
+    return await platform_service.list_all_webhook_deliveries(db, workspace_id, status, page, page_size)
+
+@router.post("/{workspace_id}/webhooks/deliveries/{delivery_id}/retry", status_code=status.HTTP_202_ACCEPTED)
+async def retry_webhook_delivery_v2(
+    workspace_id: UUID,
+    delivery_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    member: WorkspaceMember = Depends(require_role(WorkspaceRole.owner, WorkspaceRole.admin)),
+):
+    await platform_service.retry_webhook_delivery(db, workspace_id, delivery_id)
+    return {"status": "enqueued"}
+
+# --- Legacy Webhook Endpoints (Kept for compatibility) ---
+
 @router.get("/{workspace_id}/webhook-endpoints", response_model=list[WebhookEndpointResponse])
 async def list_webhook_endpoints(
     workspace_id: UUID,

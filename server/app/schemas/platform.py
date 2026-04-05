@@ -49,9 +49,11 @@ class WebhookEndpointCreate(BaseModel):
     @classmethod
     def validate_events(cls, v):
         allowed = {
-            "call.completed", "call.failed", "call.voicemail",
-            "campaign.completed", "campaign.paused",
-            "contact.opted_out", "kb.sync_failed",
+            "call.started", "call.completed", "call.failed", "call.voicemail",
+            "campaign.started", "campaign.paused", "campaign.completed",
+            "contact.updated", "contact.opted_out",
+            "agent.created", "agent.updated",
+            "kb.sync_completed", "kb.sync_failed",
         }
         invalid = set(v) - allowed
         if invalid:

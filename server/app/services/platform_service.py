@@ -141,6 +141,21 @@ async def list_webhook_deliveries(
     result = await db.execute(stmt)
     return list(result.scalars().all())
 
+async def list_all_webhook_deliveries(
+    db: AsyncSession, 
+    workspace_id: UUID, 
+    status: WebhookDeliveryStatus | None = None,
+    page: int = 1,
+    page_size: int = 50
+) -> list[WebhookDelivery]:
+    stmt = select(WebhookDelivery).where(WebhookDelivery.workspace_id == workspace_id)
+    if status:
+        stmt = stmt.where(WebhookDelivery.status == status)
+    
+    stmt = stmt.order_by(WebhookDelivery.created_at.desc()).offset((page - 1) * page_size).limit(page_size)
+    result = await db.execute(stmt)
+    return list(result.scalars().all())
+
 async def retry_webhook_delivery(db: AsyncSession, workspace_id: UUID, delivery_id: UUID) -> None:
     from app.background.outgoing_webhooks import deliver_webhook
     

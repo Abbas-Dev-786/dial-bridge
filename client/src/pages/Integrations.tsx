@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Loader2, ExternalLink, XCircle, CheckCircle, AlertCircle, Plus } from "lucide-react";
+import { Loader2, CheckCircle, Plus, ScrollText } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { workspaceRequest } from "@/lib/api";
 import { StatusBadge } from "@/components/shared/StatusBadge";
@@ -28,6 +29,7 @@ interface WorkspaceIntegration {
 }
 
 export default function Integrations() {
+  const navigate = useNavigate();
   const { toast } = useToast();
   const [providers, setProviders] = useState<Provider[]>([]);
   const [installed, setInstalled] = useState<WorkspaceIntegration[]>([]);
@@ -96,7 +98,6 @@ export default function Integrations() {
     );
   }
 
-  // Group connected integrations by provider key for quick lookup
   const connectedMap = installed.reduce((acc, current) => {
     acc[current.provider.key] = current;
     return acc;
@@ -109,6 +110,9 @@ export default function Integrations() {
           <h1 className="text-2xl font-bold tracking-tight">Integrations</h1>
           <p className="text-sm text-muted-foreground">Manage service-level connections for your workspace.</p>
         </div>
+        <Button variant="outline" size="sm" onClick={() => navigate("/integrations/webhooks")}>
+          <ScrollText className="mr-2 h-4 w-4" /> Webhook Settings
+        </Button>
       </div>
 
       <div className="space-y-8">
@@ -178,7 +182,7 @@ export default function Integrations() {
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {providers.map((p) => {
               const integration = connectedMap[p.key];
-              if (integration) return null; // Already shown in connected section
+              if (integration) return null;
 
               return (
                 <div key={p.id} className="rounded-xl border bg-card p-5 shadow-sm hover:shadow-md transition-shadow flex flex-col justify-between">

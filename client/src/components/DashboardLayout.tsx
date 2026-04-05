@@ -48,16 +48,18 @@ export function DashboardLayout() {
                   const isLast = i === segments.length - 1;
                   const label = routeLabels[seg] || seg;
                   return (
-                    <BreadcrumbItem key={seg}>
-                      {i > 0 && <BreadcrumbSeparator />}
-                      {isLast ? (
-                        <BreadcrumbPage>{label}</BreadcrumbPage>
-                      ) : (
-                        <BreadcrumbLink href={`/${segments.slice(0, i + 1).join("/")}`}>
-                          {label}
-                        </BreadcrumbLink>
-                      )}
-                    </BreadcrumbItem>
+                    <div key={seg} className="flex items-center">
+                      <BreadcrumbItem>
+                        {isLast ? (
+                          <BreadcrumbPage>{label}</BreadcrumbPage>
+                        ) : (
+                          <BreadcrumbLink href={`/${segments.slice(0, i + 1).join("/")}`}>
+                            {label}
+                          </BreadcrumbLink>
+                        )}
+                      </BreadcrumbItem>
+                      {!isLast && <BreadcrumbSeparator className="mx-2" />}
+                    </div>
                   );
                 })}
               </BreadcrumbList>

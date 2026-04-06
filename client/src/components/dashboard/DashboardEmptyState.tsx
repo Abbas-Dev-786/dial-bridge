@@ -12,9 +12,6 @@ export function DashboardEmptyState() {
         <div className="mx-auto mb-8 flex h-32 w-32 items-center justify-center rounded-full bg-primary/10">
           <div className="relative">
             <Rocket className="h-16 w-16 text-primary" />
-            <div className="absolute -right-2 -top-2 flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg">
-              <Zap className="h-4 w-4" />
-            </div>
           </div>
         </div>
 
@@ -22,8 +19,8 @@ export function DashboardEmptyState() {
           Launch your first voice campaign
         </h1>
         <p className="mt-3 text-muted-foreground leading-relaxed">
-          Build an AI voice agent, add it to a campaign, and start making
-          calls — all in under 5 minutes.
+          Build an AI voice agent, add it to a campaign, and start making calls
+          — all in under 5 minutes.
         </p>
 
         {/* Steps preview */}
@@ -32,8 +29,8 @@ export function DashboardEmptyState() {
             {
               step: 1,
               icon: Bot,
-              label: "Create an Agent",
-              desc: "Configure voice, personality & knowledge base",
+              label: "Create a Campaign",
+              desc: "Define your campaign goal and settings",
             },
             {
               step: 2,

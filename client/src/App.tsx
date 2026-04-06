@@ -12,7 +12,6 @@ import ForgotPassword from "@/pages/ForgotPassword";
 import Dashboard from "@/pages/Dashboard";
 import Analytics from "@/pages/Analytics";
 import AgentsList from "@/pages/AgentsList";
-import CreateAgent from "@/pages/CreateAgent";
 import AgentDetail from "@/pages/AgentDetail";
 
 import CampaignsList from "@/pages/CampaignsList";
@@ -21,7 +20,6 @@ import CampaignDetail from "@/pages/CampaignDetail";
 import CallLogs from "@/pages/CallLogs";
 import CallDetail from "@/pages/CallDetail";
 import PhoneNumbers from "@/pages/PhoneNumbers";
-import KnowledgeBase from "@/pages/KnowledgeBase";
 import Integrations from "@/pages/Integrations";
 import WebhookLogs from "@/pages/WebhookLogs";
 import GeneralSettings from "@/pages/SettingsGeneral";
@@ -55,7 +53,7 @@ const App = () => (
               <Route path="/forgot-password" element={<ForgotPassword />} />
 
               {/* Dashboard */}
-              <Route 
+              <Route
                 element={
                   <ProtectedRoute>
                     <DashboardLayout />
@@ -65,19 +63,19 @@ const App = () => (
                 <Route path="/dashboard" element={<Dashboard />} />
                 <Route path="/analytics" element={<Analytics />} />
                 <Route path="/agents" element={<AgentsList />} />
-                <Route path="/agents/new" element={<CreateAgent />} />
                 <Route path="/agents/:id" element={<AgentDetail />} />
-                
                 <Route path="/campaigns" element={<CampaignsList />} />
                 <Route path="/campaigns/:id" element={<CampaignDetail />} />
                 <Route path="/calls" element={<CallLogs />} />
                 <Route path="/calls/:id" element={<CallDetail />} />
                 <Route path="/phone-numbers" element={<PhoneNumbers />} />
-                <Route path="/knowledge" element={<KnowledgeBase />} />
                 <Route path="/integrations" element={<Integrations />} />
-                <Route path="/integrations/webhooks" element={<WebhookLogs />} />
+                <Route
+                  path="/integrations/webhooks"
+                  element={<WebhookLogs />}
+                />
                 <Route path="/audit-logs" element={<AuditLogs />} />
-                
+
                 {/* Settings with shared layout */}
                 <Route element={<SettingsLayout />}>
                   <Route path="/settings" element={<GeneralSettings />} />

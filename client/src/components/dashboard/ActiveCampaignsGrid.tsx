@@ -3,7 +3,6 @@ import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { useNavigate } from "react-router-dom";
-import { ACTIVE_CAMPAIGNS } from "@/lib/mockData";
 import { useDashboardStore } from "@/store/useDashboardStore";
 
 interface Campaign {

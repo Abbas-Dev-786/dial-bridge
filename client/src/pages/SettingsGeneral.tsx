@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { CheckCircle, AlertTriangle, Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import { useWorkspaceProfileQuery, useElevenLabsStatusQuery, useUpdateWorkspaceMutation } from "@/hooks/api/useSettings";
+import { useWorkspaceProfileQuery, useElevenLabsStatusQuery, useWorkspaceMutations } from "@/hooks/api/useSettings";
 import { DeleteConfirmDialog } from "@/components/dialogs/DeleteConfirmDialog";
 import { useNavigate } from "react-router-dom";
 
@@ -17,7 +17,10 @@ export default function GeneralSettings() {
 
   const { data: workspace, isLoading: isLoadingWorkspace } = useWorkspaceProfileQuery();
   const { data: elevenLabs, isLoading: isLoadingElevenLabs } = useElevenLabsStatusQuery();
-  const { mutate: updateWorkspace, isPending: isSaving } = useUpdateWorkspaceMutation();
+  const { updateWorkspace, deleteWorkspace } = useWorkspaceMutations();
+  
+  const isSaving = updateWorkspace.isPending;
+  const isDeleting = deleteWorkspace.isPending;
 
   const isLoading = isLoadingWorkspace || isLoadingElevenLabs;
 
@@ -33,23 +36,23 @@ export default function GeneralSettings() {
   }, [workspace]);
 
   const handleSave = () => {
-    updateWorkspace({ name, timezone }, {
+    updateWorkspace.mutate({ name, timezone }, {
       onSuccess: () => toast.success("Settings saved successfully"),
       onError: () => toast.error("Failed to save settings")
     });
   };
 
-  const handleDelete = async () => {
-    try {
-      // Intentionally using ad-hoc request since it logs out/redirects usually for delete
-      const { workspaceRequest } = await import('@/lib/api');
-      await workspaceRequest.delete("");
-      toast.success("Workspace deleted");
-      navigate("/workspaces");
-    } catch (err) {
-      console.error(err);
-      toast.error("Failed to delete workspace");
-    }
+  const handleDelete = () => {
+    deleteWorkspace.mutate(undefined, {
+      onSuccess: () => {
+        toast.success("Workspace deleted");
+        navigate("/workspaces");
+      },
+      onError: (err: any) => {
+        console.error(err);
+        toast.error(err.response?.data?.detail || "Failed to delete workspace");
+      }
+    });
   };
 
   if (isLoading) {

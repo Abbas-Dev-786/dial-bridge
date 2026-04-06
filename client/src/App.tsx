@@ -14,7 +14,7 @@ import Analytics from "@/pages/Analytics";
 import AgentsList from "@/pages/AgentsList";
 import AgentDetail from "@/pages/AgentDetail";
 
-import CampaignsList from "@/pages/CampaignsList";
+import { CampaignsList } from "@/pages/CampaignsList";
 
 import CampaignDetail from "@/pages/CampaignDetail";
 import CallLogs from "@/pages/CallLogs";
@@ -72,13 +72,19 @@ const App = () => (
                 <Route path="/calls/:id" element={<CallDetail />} />
                 <Route path="/phone-numbers" element={<PhoneNumbers />} />
                 <Route path="/integrations" element={<Integrations />} />
-                <Route path="/integrations/oauth/callback" element={<OAuthCallback />} />
+                <Route
+                  path="/integrations/oauth/callback"
+                  element={<OAuthCallback />}
+                />
                 <Route
                   path="/integrations/webhooks"
                   element={<WebhookLogs />}
                 />
                 <Route path="/audit-logs" element={<AuditLogs />} />
-                <Route path="/accept-invite/:token" element={<AcceptInvite />} />
+                <Route
+                  path="/accept-invite/:token"
+                  element={<AcceptInvite />}
+                />
 
                 {/* Settings with shared layout */}
                 <Route element={<SettingsLayout />}>

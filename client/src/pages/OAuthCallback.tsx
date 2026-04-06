@@ -1,53 +1,40 @@
 import { useEffect, useState } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
-import api from "@/lib/api";
-import { useToast } from "@/hooks/use-toast";
 import { Loader2, CheckCircle2, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useAuthMutations } from "@/hooks/api/useAuth";
 
 export default function OAuthCallback() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const { toast } = useToast();
+  const { oauthCallback } = useAuthMutations();
   const [status, setStatus] = useState<"loading" | "success" | "error">("loading");
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const handleCallback = async () => {
-      const code = searchParams.get("code");
-      const state = searchParams.get("state");
+    const code = searchParams.get("code");
+    const state = searchParams.get("state");
 
-      if (!code) {
-        setStatus("error");
-        setError("Missing authorization code from provider.");
-        return;
-      }
+    if (!code) {
+      setStatus("error");
+      setError("Missing authorization code from provider.");
+      return;
+    }
 
-      try {
-        // Send the code and state back to our API to complete the OAuth flow
-        await api.post("/api/v1/workspaces/oauth/callback", {
-          code,
-          state,
-        });
-
+    oauthCallback.mutate({ code, state }, {
+      onSuccess: () => {
         setStatus("success");
-        toast({
-          title: "Integration Connected",
-          description: "Your integration has been successfully connected.",
-        });
-
         // Redirect back to integrations after a short delay
         setTimeout(() => {
           navigate("/integrations");
         }, 2000);
-      } catch (err: any) {
+      },
+      onError: (err: any) => {
         setStatus("error");
         setError(err.response?.data?.detail || "Failed to complete integration. Please try again.");
       }
-    };
-
-    handleCallback();
-  }, [searchParams, navigate, toast]);
+    });
+  }, [searchParams, navigate]);
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-background p-4 text-center">

@@ -4,7 +4,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Copy, Check, Key } from "lucide-react";
+import { Copy, Check, Key, Loader2 } from "lucide-react";
+import { useApiKeyMutations } from "@/hooks/api/useSettings";
+import { toast } from "sonner";
 
 interface GenerateAPIKeyDialogProps {
   open: boolean;
@@ -13,10 +15,29 @@ interface GenerateAPIKeyDialogProps {
 
 export function GenerateAPIKeyDialog({ open, onOpenChange }: GenerateAPIKeyDialogProps) {
   const [step, setStep] = useState<"create" | "show">("create");
+  const [name, setName] = useState("");
   const [copied, setCopied] = useState(false);
-  const generatedKey = "vai_prod_sk_" + Math.random().toString(36).slice(2, 18);
+  const [generatedKey, setGeneratedKey] = useState("");
 
-  const handleCreate = () => setStep("show");
+  const { generateApiKey } = useApiKeyMutations();
+
+  const handleCreate = () => {
+    if (!name) {
+      toast.error("Please enter a key name");
+      return;
+    }
+
+    generateApiKey.mutate({ name }, {
+      onSuccess: (data: any) => {
+        setGeneratedKey(data.key);
+        setStep("show");
+      },
+      onError: (err: any) => {
+        toast.error(err.response?.data?.detail || "Failed to generate API key");
+      }
+    });
+  };
+
   const handleCopy = () => {
     navigator.clipboard.writeText(generatedKey);
     setCopied(true);
@@ -25,7 +46,9 @@ export function GenerateAPIKeyDialog({ open, onOpenChange }: GenerateAPIKeyDialo
 
   const handleClose = () => {
     setStep("create");
+    setName("");
     setCopied(false);
+    setGeneratedKey("");
     onOpenChange(false);
   };
 
@@ -50,7 +73,11 @@ export function GenerateAPIKeyDialog({ open, onOpenChange }: GenerateAPIKeyDialo
           <div className="space-y-4">
             <div className="space-y-2">
               <Label>Key Name</Label>
-              <Input placeholder="e.g., Production, Staging" />
+              <Input 
+                placeholder="e.g., Production, Staging" 
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+              />
             </div>
             <div className="space-y-2">
               <Label>Environment</Label>
@@ -81,8 +108,11 @@ export function GenerateAPIKeyDialog({ open, onOpenChange }: GenerateAPIKeyDialo
         <DialogFooter>
           {step === "create" ? (
             <>
-              <Button variant="outline" onClick={handleClose}>Cancel</Button>
-              <Button onClick={handleCreate}>Generate Key</Button>
+              <Button variant="outline" onClick={handleClose} disabled={generateApiKey.isPending}>Cancel</Button>
+              <Button onClick={handleCreate} disabled={generateApiKey.isPending}>
+                {generateApiKey.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Generate Key
+              </Button>
             </>
           ) : (
             <Button onClick={handleClose} className="w-full">Done</Button>

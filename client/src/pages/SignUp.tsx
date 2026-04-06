@@ -10,8 +10,8 @@ import { Phone, Loader2, Check, Globe, Briefcase } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/store/useAuthStore";
 import { useWorkspaceStore } from "@/store/useWorkspaceStore";
-import api from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
+import { useAuthMutations } from "@/hooks/api/useAuth";
 
 // Schema for Step 1: User Registration
 const registerSchema = z.object({
@@ -34,8 +34,9 @@ type WorkspaceFormValues = z.infer<typeof workspaceSchema>;
 export default function SignUp() {
   const [step, setStep] = useState<1 | 2>(1);
   const navigate = useNavigate();
-  const { login, fetchMe } = useAuthStore();
+  const { fetchMe } = useAuthStore();
   const { fetchWorkspaces, setActiveWorkspaceId } = useWorkspaceStore();
+  const { signup, createWorkspace } = useAuthMutations();
   const { toast } = useToast();
 
   // Step 1 Form
@@ -59,69 +60,53 @@ export default function SignUp() {
   });
 
   const onRegisterSubmit = async (data: RegisterFormValues) => {
-    try {
-      // Step 1: Register user
-      await api.post("/api/v1/auth/register", {
-        email: data.email,
-        password: data.password,
-        full_name: data.fullName,
-      });
-
-      // Step 2: Automatically log them in to get tokens (since register only returns UserResponse)
-      // Actually, many backends handle this in one go, but if not, logic follows:
-      const loginResponse = await api.post("/api/v1/auth/login", {
-        email: data.email,
-        password: data.password,
-      });
-
-      const { access_token, refresh_token, user } = loginResponse.data;
-      
-      // Store tokens and user in store
-      login(access_token, refresh_token, user);
-      
-      // Move to workspace creation
-      setStep(2);
-      
-      toast({
-        title: "Account created!",
-        description: "Now let's set up your workspace.",
-      });
-    } catch (error: any) {
-      console.error("Registration failed:", error);
-      const detail = error.response?.data?.detail;
-      toast({
-        variant: "destructive",
-        title: "Registration Failed",
-        description: detail || "Something went wrong. Please try again.",
-      });
-    }
+    signup.mutate({
+      email: data.email,
+      password: data.password,
+      full_name: data.fullName,
+    }, {
+      onSuccess: () => {
+        setStep(2);
+        toast({
+          title: "Account created!",
+          description: "Now let's set up your workspace.",
+        });
+      },
+      onError: (error: any) => {
+        console.error("Registration failed:", error);
+        const detail = error.response?.data?.detail;
+        toast({
+          variant: "destructive",
+          title: "Registration Failed",
+          description: detail || "Something went wrong. Please try again.",
+        });
+      }
+    });
   };
 
   const onWorkspaceSubmit = async (data: WorkspaceFormValues) => {
-    try {
-      // POST /api/v1/workspaces
-      const response = await api.post("/api/v1/workspaces", data);
-      const workspace = response.data;
-      
-      // Update workspace store
-      await fetchWorkspaces();
-      setActiveWorkspaceId(workspace.id);
-      
-      toast({
-        title: "Workspace created!",
-        description: "Welcome to DialBridge.",
-      });
+    createWorkspace.mutate(data, {
+      onSuccess: async (workspace) => {
+        await fetchWorkspaces();
+        setActiveWorkspaceId(workspace.id);
+        
+        toast({
+          title: "Workspace created!",
+          description: "Welcome to DialBridge.",
+        });
 
-      navigate("/dashboard");
-    } catch (error: any) {
-      console.error("Workspace creation failed:", error);
-      const detail = error.response?.data?.detail;
-      toast({
-        variant: "destructive",
-        title: "Workspace Setup Failed",
-        description: detail || "Could not create workspace. Please try again.",
-      });
-    }
+        navigate("/dashboard");
+      },
+      onError: (error: any) => {
+        console.error("Workspace creation failed:", error);
+        const detail = error.response?.data?.detail;
+        toast({
+          variant: "destructive",
+          title: "Workspace Setup Failed",
+          description: detail || "Could not create workspace. Please try again.",
+        });
+      }
+    });
   };
 
   // Helper to auto-generate slug from name
@@ -195,8 +180,8 @@ export default function SignUp() {
                   <p className="text-xs font-medium text-destructive">{registerForm.formState.errors.password.message}</p>
                 )}
               </div>
-              <Button className="w-full" type="submit" disabled={registerForm.formState.isSubmitting}>
-                {registerForm.formState.isSubmitting ? (
+              <Button className="w-full" type="submit" disabled={signup.isPending}>
+                {signup.isPending ? (
                   <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Creating Account...</>
                 ) : (
                   "Create Account"
@@ -258,9 +243,9 @@ export default function SignUp() {
               <Button 
                 className="flex-1" 
                 type="submit" 
-                disabled={workspaceForm.formState.isSubmitting}
+                disabled={createWorkspace.isPending}
               >
-                {workspaceForm.formState.isSubmitting ? (
+                {createWorkspace.isPending ? (
                   <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Initializing...</>
                 ) : (
                   "Finish Setup"

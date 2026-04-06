@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useCampaignsQuery } from "@/hooks/api/useCampaigns";
+
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { DataTable, Column } from "@/components/shared/DataTable";
@@ -12,8 +13,6 @@ import { EmptyState } from "@/components/shared/EmptyState";
 import { CreateCampaignModal } from "@/components/dialogs/CreateCampaignModal";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
-import { useWorkspaceStore } from "@/store/useWorkspaceStore";
-import api from "@/lib/api";
 
 interface CampaignListItem {
   id: string;
@@ -30,27 +29,15 @@ interface CampaignListItem {
   created_at: string;
 }
 
-export default function CampaignsList() {
+export function CampaignsList() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { toast } = useToast();
   const [createOpen, setCreateOpen] = useState(false);
-  const { activeWorkspaceId } = useWorkspaceStore();
 
   const statusFilter = searchParams.get("status");
 
-  const { data: campaigns = [], isLoading, isError, error, refetch } = useQuery({
-    queryKey: ["campaigns", activeWorkspaceId, statusFilter],
-    queryFn: async () => {
-      if (!activeWorkspaceId) return [];
-      const response = await api.get(`/api/v1/workspaces/${activeWorkspaceId}/campaigns`, {
-        params: {
-          status: statusFilter ? statusFilter.split(",") : undefined,
-        },
-      });
-      return response.data as CampaignListItem[];
-    },
-    enabled: !!activeWorkspaceId,
+  const { data: campaigns = [], isLoading, isError, error, refetch } = useCampaignsQuery({
+    status: statusFilter ? statusFilter.split(",") : undefined
   });
 
   // Keyboard shortcut: C to open modal

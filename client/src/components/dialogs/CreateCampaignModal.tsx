@@ -26,8 +26,8 @@ import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
-import { workspaceRequest } from "@/lib/api";
 import { Switch } from "@/components/ui/switch";
+import { useCampaignMutations } from "@/hooks/api/useCampaigns";
 
 const campaignSchema = z.object({
   name: z.string()
@@ -67,8 +67,10 @@ export function CreateCampaignModal({ open, onOpenChange }: CreateCampaignModalP
   const navigate = useNavigate();
   const { toast } = useToast();
   const [showOptional, setShowOptional] = useState(false);
-  const [isGenerating, setIsGenerating] = useState(false);
   const [generationResult, setGenerationResult] = useState<AgentGenerationPreview | null>(null);
+
+  const { createCampaign } = useCampaignMutations();
+  const isGenerating = createCampaign.isPending;
 
   const form = useForm<CampaignFormValues>({
     resolver: zodResolver(campaignSchema),
@@ -84,36 +86,34 @@ export function CreateCampaignModal({ open, onOpenChange }: CreateCampaignModalP
     },
   });
 
-  const onSubmit = async (data: CampaignFormValues) => {
-    setIsGenerating(true);
-    try {
-      const response = await workspaceRequest.post("/campaigns", data);
-      const result = (response.data as any).agent_generation as AgentGenerationPreview;
-      
-      setGenerationResult(result);
-      
-      if (result.generation_failed) {
+  const onSubmit = (data: CampaignFormValues) => {
+    createCampaign.mutate(data, {
+      onSuccess: (responseData: any) => {
+        const result = responseData.agent_generation as AgentGenerationPreview;
+        setGenerationResult(result);
+        
+        if (result.generation_failed) {
+          toast({
+            variant: "destructive",
+            title: "Agent Generation Warning",
+            description: result.fallback_warning || "AI failed to generate a custom agent. Using fallback configuration.",
+          });
+        } else {
+          toast({
+            title: "Campaign & Agent Created!",
+            description: "Your AI agent has been successfully generated.",
+          });
+        }
+      },
+      onError: (error: any) => {
+        console.error("Campaign creation failed:", error);
         toast({
           variant: "destructive",
-          title: "Agent Generation Warning",
-          description: result.fallback_warning || "AI failed to generate a custom agent. Using fallback configuration.",
-        });
-      } else {
-        toast({
-          title: "Campaign & Agent Created!",
-          description: "Your AI agent has been successfully generated.",
+          title: "Creation Failed",
+          description: error.response?.data?.detail || "An error occurred while creating the campaign.",
         });
       }
-    } catch (error: any) {
-      console.error("Campaign creation failed:", error);
-      toast({
-        variant: "destructive",
-        title: "Creation Failed",
-        description: error.response?.data?.detail || "An error occurred while creating the campaign.",
-      });
-    } finally {
-      setIsGenerating(false);
-    }
+    });
   };
 
   const handleFinish = () => {

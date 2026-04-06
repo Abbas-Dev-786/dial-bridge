@@ -1,45 +1,37 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import api from "@/lib/api";
-import { useToast } from "@/hooks/use-toast";
 import { Loader2, CheckCircle2, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useAuthMutations } from "@/hooks/api/useAuth";
 
 export default function AcceptInvite() {
   const { token } = useParams();
   const navigate = useNavigate();
-  const { toast } = useToast();
+  const { acceptInvite } = useAuthMutations();
   const [status, setStatus] = useState<"loading" | "success" | "error">("loading");
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const acceptInvite = async () => {
-      if (!token) {
-        setStatus("error");
-        setError("Invalid invitation link.");
-        return;
-      }
+    if (!token) {
+      setStatus("error");
+      setError("Invalid invitation link.");
+      return;
+    }
 
-      try {
-        await api.post(`/api/v1/workspaces/invitations/accept/${token}`);
+    acceptInvite.mutate(token, {
+      onSuccess: () => {
         setStatus("success");
-        toast({
-          title: "Invitation Accepted",
-          description: "You have successfully joined the workspace.",
-        });
-        
         // Wait a bit before redirecting
         setTimeout(() => {
           navigate("/dashboard");
         }, 2000);
-      } catch (err: any) {
+      },
+      onError: (err: any) => {
         setStatus("error");
         setError(err.response?.data?.detail || "Failed to accept invitation. The link may be expired or invalid.");
       }
-    };
-
-    acceptInvite();
-  }, [token, navigate, toast]);
+    });
+  }, [token, navigate]);
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-background p-4 text-center">

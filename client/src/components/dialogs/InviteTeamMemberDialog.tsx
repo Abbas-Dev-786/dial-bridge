@@ -5,8 +5,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { UserPlus, Loader2 } from "lucide-react";
-import { workspaceRequest } from "@/lib/api";
 import { toast } from "sonner";
+import { useMemberMutations } from "@/hooks/api/useSettings";
 
 interface InviteTeamMemberDialogProps {
   open: boolean;
@@ -17,28 +17,29 @@ interface InviteTeamMemberDialogProps {
 export function InviteTeamMemberDialog({ open, onOpenChange, onSuccess }: InviteTeamMemberDialogProps) {
   const [email, setEmail] = useState("");
   const [role, setRole] = useState("viewer");
-  const [isInviting, setIsInviting] = useState(false);
+  
+  const { inviteMember } = useMemberMutations();
+  const isInviting = inviteMember.isPending;
 
-  const handleInvite = async () => {
+  const handleInvite = () => {
     if (!email) {
       toast.error("Please enter an email address");
       return;
     }
     
-    setIsInviting(true);
-    try {
-      await workspaceRequest.post("/members/invite", { email, role });
-      toast.success("Invitation sent successfully");
-      setEmail("");
-      setRole("viewer");
-      onSuccess?.();
-      onOpenChange(false);
-    } catch (err: any) {
-      console.error(err);
-      toast.error(err.response?.data?.detail || "Failed to send invitation");
-    } finally {
-      setIsInviting(false);
-    }
+    inviteMember.mutate({ email, role }, {
+      onSuccess: () => {
+        toast.success("Invitation sent successfully");
+        setEmail("");
+        setRole("viewer");
+        onSuccess?.();
+        onOpenChange(false);
+      },
+      onError: (err: any) => {
+        console.error(err);
+        toast.error(err.response?.data?.detail || "Failed to send invitation");
+      }
+    });
   };
 
   return (

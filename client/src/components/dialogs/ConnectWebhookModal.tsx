@@ -4,8 +4,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Loader2 } from "lucide-react";
-import { workspaceRequest } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
+import { useIntegrationMutations } from "@/hooks/api/useSettings";
 
 interface ConnectWebhookModalProps {
   open: boolean;
@@ -18,34 +18,39 @@ export function ConnectWebhookModal({ open, onOpenChange, provider, onConnected 
   const { toast } = useToast();
   const [endpointUrl, setEndpointUrl] = useState("");
   const [signingSecret, setSigningSecret] = useState("");
-  const [isConnecting, setIsConnecting] = useState(false);
+  
+  const { connectIntegration } = useIntegrationMutations();
+  const isConnecting = connectIntegration.isPending;
 
-  const handleConnect = async () => {
+  const handleConnect = () => {
     if (!provider) return;
-    setIsConnecting(true);
-    try {
-      await workspaceRequest.post(`/integrations/${provider.key}/connect-webhook`, {
+    
+    connectIntegration.mutate({
+      providerKey: provider.key,
+      data: {
         endpoint_url: endpointUrl,
         signing_secret: signingSecret || null
-      });
-      toast({
-        title: "Integration Connected",
-        description: `Successfully connected ${provider.display_name}.`,
-      });
-      onConnected();
-      onOpenChange(false);
-      setEndpointUrl("");
-      setSigningSecret("");
-    } catch (error) {
-      console.error("Connection failed", error);
-      toast({
-        title: "Connection Failed",
-        description: "Please check your details and try again.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsConnecting(false);
-    }
+      }
+    }, {
+      onSuccess: () => {
+        toast({
+          title: "Integration Connected",
+          description: `Successfully connected ${provider.display_name}.`,
+        });
+        onConnected();
+        onOpenChange(false);
+        setEndpointUrl("");
+        setSigningSecret("");
+      },
+      onError: (error) => {
+        console.error("Connection failed", error);
+        toast({
+          title: "Connection Failed",
+          description: "Please check your details and try again.",
+          variant: "destructive",
+        });
+      }
+    });
   };
 
   return (

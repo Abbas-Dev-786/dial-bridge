@@ -9,8 +9,8 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Phone, Loader2 } from "lucide-react";
 import { useAuthStore } from "@/store/useAuthStore";
-import api from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
+import { useAuthMutations } from "@/hooks/api/useAuth";
 
 const loginSchema = z.object({
   email: z.string().email("Invalid email address"),
@@ -23,7 +23,8 @@ type LoginFormValues = z.infer<typeof loginSchema>;
 export default function Login() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { login, isAuthenticated } = useAuthStore();
+  const { isAuthenticated } = useAuthStore();
+  const { login } = useAuthMutations();
   const { toast } = useToast();
 
   const from = location.state?.from?.pathname || "/dashboard";
@@ -48,42 +49,34 @@ export default function Login() {
   });
 
   const onSubmit = async (data: LoginFormValues) => {
-    try {
-      const response = await api.post("/api/v1/auth/login", {
-        email: data.email,
-        password: data.password,
-      });
-
-      const { access_token, refresh_token, user } = response.data;
-      
-      login(access_token, refresh_token, user);
-      
-      toast({
-        title: "Welcome back!",
-        description: "You have successfully signed in.",
-      });
-
-      navigate(from, { replace: true });
-    } catch (error: any) {
-      console.error("Login failed:", error);
-      
-      const status = error.response?.status;
-      const detail = error.response?.data?.detail;
-
-      if (status === 401) {
+    login.mutate({ email: data.email, password: data.password }, {
+      onSuccess: () => {
         toast({
-          variant: "destructive",
-          title: "Authentication Failed",
-          description: detail || "Invalid email or password. Please try again.",
+          title: "Welcome back!",
+          description: "You have successfully signed in.",
         });
-      } else {
-        toast({
-          variant: "destructive",
-          title: "Error",
-          description: detail || "An unexpected error occurred. Please try again later.",
-        });
+        navigate(from, { replace: true });
+      },
+      onError: (error: any) => {
+        console.error("Login failed:", error);
+        const status = error.response?.status;
+        const detail = error.response?.data?.detail;
+
+        if (status === 401) {
+          toast({
+            variant: "destructive",
+            title: "Authentication Failed",
+            description: detail || "Invalid email or password. Please try again.",
+          });
+        } else {
+          toast({
+            variant: "destructive",
+            title: "Error",
+            description: detail || "An unexpected error occurred. Please try again later.",
+          });
+        }
       }
-    }
+    });
   };
 
   return (
@@ -182,8 +175,8 @@ export default function Login() {
               Remember me
             </Label>
           </div>
-          <Button className="w-full" type="submit" disabled={isSubmitting}>
-            {isSubmitting ? (
+          <Button className="w-full" type="submit" disabled={login.isPending}>
+            {login.isPending ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 Signing In...

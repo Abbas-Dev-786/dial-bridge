@@ -3,11 +3,30 @@ import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Phone, ArrowLeft, Mail } from "lucide-react";
+import { Phone, ArrowLeft, Mail, Loader2 } from "lucide-react";
+import { useAuthMutations } from "@/hooks/api/useAuth";
+import { toast } from "sonner";
 
 export default function ForgotPassword() {
   const [sent, setSent] = useState(false);
   const [email, setEmail] = useState("");
+  const { forgotPassword } = useAuthMutations();
+
+  const handleSendLink = () => {
+    if (!email) {
+      toast.error("Please enter your email");
+      return;
+    }
+
+    forgotPassword.mutate({ email }, {
+      onSuccess: () => {
+        setSent(true);
+      },
+      onError: (err: any) => {
+        toast.error(err.response?.data?.detail || "Failed to send reset link");
+      }
+    });
+  };
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background p-4">
@@ -43,7 +62,10 @@ export default function ForgotPassword() {
               <Label htmlFor="email">Email</Label>
               <Input id="email" type="email" placeholder="you@company.com" value={email} onChange={(e) => setEmail(e.target.value)} />
             </div>
-            <Button className="w-full" onClick={() => setSent(true)}>Send Reset Link</Button>
+            <Button className="w-full" onClick={handleSendLink} disabled={forgotPassword.isPending}>
+              {forgotPassword.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Send Reset Link
+            </Button>
             <Button variant="ghost" asChild className="w-full">
               <Link to="/login">
                 <ArrowLeft className="mr-2 h-4 w-4" /> Back to sign in

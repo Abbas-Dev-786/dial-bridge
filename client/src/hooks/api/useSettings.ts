@@ -40,7 +40,17 @@ export function useMemberMutations() {
     },
   });
 
-  return { removeMember, updateRole };
+  const inviteMember = useMutation({
+    mutationFn: async (data: { email: string; role: string }) => {
+      const response = await workspaceRequest.post("/members/invite", data);
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["members", activeWorkspaceId] });
+    },
+  });
+
+  return { removeMember, updateRole, inviteMember };
 }
 
 // --- Integrations ---
@@ -93,7 +103,18 @@ export function useIntegrationMutations() {
     },
   });
 
-  return { initiateOAuth, disconnectIntegration };
+  const connectIntegration = useMutation({
+    mutationFn: async ({ providerKey, data }: { providerKey: string; data: any }) => {
+      const type = data.api_key ? "api-key" : "webhook";
+      const response = await workspaceRequest.post(`/integrations/${providerKey}/connect-${type}`, data);
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["workspace-integrations", activeWorkspaceId] });
+    },
+  });
+
+  return { initiateOAuth, disconnectIntegration, connectIntegration };
 }
 
 // --- Audit Logs ---
@@ -140,11 +161,11 @@ export function useElevenLabsStatusQuery() {
   });
 }
 
-export function useUpdateWorkspaceMutation() {
+export function useWorkspaceMutations() {
   const queryClient = useQueryClient();
   const { activeWorkspaceId } = useWorkspaceStore();
 
-  return useMutation({
+  const updateWorkspace = useMutation({
     mutationFn: async (data: any) => {
       const response = await workspaceRequest.patch("", data);
       return response.data;
@@ -154,6 +175,17 @@ export function useUpdateWorkspaceMutation() {
       queryClient.invalidateQueries({ queryKey: ["workspaces"] });
     },
   });
+
+  const deleteWorkspace = useMutation({
+    mutationFn: async () => {
+      await workspaceRequest.delete("");
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["workspaces"] });
+    },
+  });
+
+  return { updateWorkspace, deleteWorkspace };
 }
 
 // --- Workspace Webhooks ---
@@ -221,4 +253,45 @@ export function useWebhookLogsQuery() {
     },
     enabled: !!activeWorkspaceId,
   });
+}
+
+// --- API Keys ---
+export function useApiKeysQuery() {
+  const { activeWorkspaceId } = useWorkspaceStore();
+
+  return useQuery({
+    queryKey: ["api-keys", activeWorkspaceId],
+    queryFn: async () => {
+      if (!activeWorkspaceId) throw new Error("No active workspace selected");
+      const response = await workspaceRequest.get<any[]>("/api-keys");
+      return response.data;
+    },
+    enabled: !!activeWorkspaceId,
+  });
+}
+
+export function useApiKeyMutations() {
+  const queryClient = useQueryClient();
+  const { activeWorkspaceId } = useWorkspaceStore();
+
+  const generateApiKey = useMutation({
+    mutationFn: async (data: { name: string }) => {
+      const response = await workspaceRequest.post("/api-keys", data);
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["api-keys", activeWorkspaceId] });
+    },
+  });
+
+  const revokeApiKey = useMutation({
+    mutationFn: async (keyId: string) => {
+      await workspaceRequest.delete(`/api-keys/${keyId}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["api-keys", activeWorkspaceId] });
+    },
+  });
+
+  return { generateApiKey, revokeApiKey };
 }

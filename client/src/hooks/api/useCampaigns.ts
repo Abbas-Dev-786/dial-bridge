@@ -2,14 +2,14 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { workspaceRequest } from "@/lib/api";
 import { useWorkspaceStore } from "@/store/useWorkspaceStore";
 
-export function useCampaignsQuery() {
+export function useCampaignsQuery(params: any = {}) {
   const { activeWorkspaceId } = useWorkspaceStore();
 
   return useQuery({
-    queryKey: ["campaigns", activeWorkspaceId],
+    queryKey: ["campaigns", activeWorkspaceId, params],
     queryFn: async () => {
       if (!activeWorkspaceId) throw new Error("No active workspace selected");
-      const response = await workspaceRequest.get<any>("/campaigns");
+      const response = await workspaceRequest.get<any>("/campaigns", { params });
       return response.data;
     },
     enabled: !!activeWorkspaceId,
@@ -25,6 +25,21 @@ export function useCampaignDetailQuery(campaignId?: string) {
       if (!activeWorkspaceId) throw new Error("No active workspace selected");
       if (!campaignId) throw new Error("No campaign ID");
       const response = await workspaceRequest.get<any>(`/campaigns/${campaignId}`);
+      return response.data;
+    },
+    enabled: !!activeWorkspaceId && !!campaignId,
+  });
+}
+
+// Calls
+export function useCampaignCallsQuery(campaignId?: string, params: any = {}) {
+  const { activeWorkspaceId } = useWorkspaceStore();
+  
+  return useQuery({
+    queryKey: ["campaign_calls", activeWorkspaceId, campaignId, params],
+    queryFn: async () => {
+      if (!activeWorkspaceId || !campaignId) throw new Error("Missing requirements");
+      const response = await workspaceRequest.get<any>(`/campaigns/${campaignId}/calls`, { params });
       return response.data;
     },
     enabled: !!activeWorkspaceId && !!campaignId,
@@ -83,9 +98,17 @@ export function useCampaignMutations(campaignId?: string) {
 
   const invalidateCampaign = () => {
     queryClient.invalidateQueries({ queryKey: ["campaigns", activeWorkspaceId] });
-    queryClient.invalidateQueries({ queryKey: ["campaign", activeWorkspaceId, campaignId] });
+    if (campaignId) queryClient.invalidateQueries({ queryKey: ["campaign", activeWorkspaceId, campaignId] });
     queryClient.invalidateQueries({ queryKey: ["dashboard", activeWorkspaceId] });
   };
+
+  const createCampaign = useMutation({
+    mutationFn: async (data: any) => {
+      const response = await workspaceRequest.post("/campaigns", data);
+      return response.data;
+    },
+    onSuccess: invalidateCampaign,
+  });
 
   const updateCampaign = useMutation({
     mutationFn: async (data: any) => {
@@ -194,6 +217,7 @@ export function useCampaignMutations(campaignId?: string) {
   });
 
   return {
+    createCampaign,
     updateCampaign,
     transitionStatus,
     regenerateAgent,

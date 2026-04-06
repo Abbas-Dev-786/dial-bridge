@@ -4,8 +4,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Loader2 } from "lucide-react";
-import { workspaceRequest } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
+import { useIntegrationMutations } from "@/hooks/api/useSettings";
 
 interface ConnectApiKeyModalProps {
   open: boolean;
@@ -17,32 +17,37 @@ interface ConnectApiKeyModalProps {
 export function ConnectApiKeyModal({ open, onOpenChange, provider, onConnected }: ConnectApiKeyModalProps) {
   const { toast } = useToast();
   const [apiKey, setApiKey] = useState("");
-  const [isConnecting, setIsConnecting] = useState(false);
+  
+  const { connectIntegration } = useIntegrationMutations();
+  const isConnecting = connectIntegration.isPending;
 
-  const handleConnect = async () => {
+  const handleConnect = () => {
     if (!provider) return;
-    setIsConnecting(true);
-    try {
-      await workspaceRequest.post(`/integrations/${provider.key}/connect-api-key`, {
+    
+    connectIntegration.mutate({
+      providerKey: provider.key,
+      data: {
         api_key: apiKey
-      });
-      toast({
-        title: "Integration Connected",
-        description: `Successfully connected ${provider.display_name}.`,
-      });
-      onConnected();
-      onOpenChange(false);
-      setApiKey("");
-    } catch (error) {
-      console.error("Connection failed", error);
-      toast({
-        title: "Connection Failed",
-        description: "Please check your API key and try again.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsConnecting(false);
-    }
+      }
+    }, {
+      onSuccess: () => {
+        toast({
+          title: "Integration Connected",
+          description: `Successfully connected ${provider.display_name}.`,
+        });
+        onConnected();
+        onOpenChange(false);
+        setApiKey("");
+      },
+      onError: (error) => {
+        console.error("Connection failed", error);
+        toast({
+          title: "Connection Failed",
+          description: "Please check your API key and try again.",
+          variant: "destructive",
+        });
+      }
+    });
   };
 
   return (

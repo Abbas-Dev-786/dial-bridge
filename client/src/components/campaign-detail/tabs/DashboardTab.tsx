@@ -6,8 +6,7 @@ import { StatusBadge } from "@/components/shared/StatusBadge";
 import { Badge } from "@/components/ui/badge";
 import { useParams, useNavigate } from "react-router-dom";
 import { useCampaignStore } from "@/store/useCampaignStore";
-import { useCampaignDetailQuery } from "@/hooks/api/useCampaigns";
-import { CAMPAIGN_CALLS, KNOWLEDGE_DOCS } from "@/lib/mockData";
+import { useCampaignDetailQuery, useCampaignCallsQuery } from "@/hooks/api/useCampaigns";
 import { forwardRef } from "react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -17,6 +16,8 @@ export function DashboardTab() {
   const { id } = useParams();
   const { setActiveTab } = useCampaignStore();
   const { data: activeCampaign } = useCampaignDetailQuery(id);
+  const { data: callsData } = useCampaignCallsQuery(id, { page_size: 5 });
+  const recentCalls = callsData?.items || [];
 
   const stats = {
     contacted: activeCampaign?.contacts_called || 0,
@@ -29,14 +30,14 @@ export function DashboardTab() {
     remaining: activeCampaign?.contacts_remaining || 0,
   };
 
-  const callColumns: Column<typeof CAMPAIGN_CALLS[0]>[] = [
-    { key: "contactName", label: "Name", render: (r) => <span className="font-medium">{r.contactName}</span> },
-    { key: "contact", label: "Number", hideOnMobile: true, render: (r) => <span className="font-mono text-xs text-muted-foreground">{r.contact}</span> },
-    { key: "agent", label: "Agent", hideOnMobile: true, render: (r) => <span className="text-xs">{r.agent}</span> },
+  const callColumns: Column<any>[] = [
+    { key: "contact_name", label: "Name", render: (r) => <span className="font-medium">{r.contact?.full_name || r.contact_name || "Unknown"}</span> },
+    { key: "contact_number", label: "Number", hideOnMobile: true, render: (r) => <span className="font-mono text-xs text-muted-foreground">{r.contact_number}</span> },
+    { key: "agent", label: "Agent", hideOnMobile: true, render: (r) => <span className="text-xs">{r.agent?.name}</span> },
     { key: "status", label: "Status", render: (r) => <StatusBadge status={r.status} /> },
-    { key: "duration", label: "Duration", hideOnMobile: true, render: (r) => <span className="font-mono text-sm">{r.duration}</span> },
-    { key: "outcome", label: "Outcome", hideOnMobile: true, render: (r) => <Badge variant="secondary" className="text-xs font-normal">{r.outcome}</Badge> },
-    { key: "cost", label: "Cost", hideOnMobile: true, render: (r) => <span className="font-mono text-xs">{r.cost}</span> },
+    { key: "duration_seconds", label: "Duration", hideOnMobile: true, render: (r) => <span className="font-mono text-sm">{r.duration_seconds}s</span> },
+    { key: "outcome", label: "Outcome", hideOnMobile: true, render: (r) => <Badge variant="secondary" className="text-xs font-normal">{r.disposition || "None"}</Badge> },
+    { key: "cost_cents", label: "Cost", hideOnMobile: true, render: (r) => <span className="font-mono text-xs">${((r.cost_cents || 0) / 100).toFixed(2)}</span> },
   ];
 
   return (
@@ -121,7 +122,7 @@ export function DashboardTab() {
             View all <ArrowRight className="ml-1 h-3.5 w-3.5" />
           </Button>
         </div>
-        <DataTable columns={callColumns} data={CAMPAIGN_CALLS.slice(0, 5)} onRowClick={(r: any) => navigate(`/calls/${r.id}`)} />
+        <DataTable columns={callColumns} data={recentCalls} onRowClick={(r: any) => navigate(`/calls/${r.id}`)} />
       </div>
     </div>
   );

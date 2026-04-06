@@ -196,51 +196,17 @@ export default function CallLogs() {
         </div>
       ) : calls.length > 0 ? (
         <div className="space-y-4">
-          <DataTable columns={columns} data={calls} searchKey="contact_phone" searchPlaceholder="Search phone numbers..." onRowClick={(r) => navigate(`/calls/${r.id}`)} />
-          
-          {totalPages > 1 && (
-            <div className="flex items-center justify-between px-2">
-              <p className="text-sm text-muted-foreground italic">
-                Showing <span className="font-medium">{(page - 1) * 20 + 1}</span> to <span className="font-medium">{Math.min(page * 20, total)}</span> of <span className="font-medium">{total}</span> records
-              </p>
-              <div className="flex items-center gap-2">
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  onClick={() => handlePageChange(page - 1)} 
-                  disabled={page === 1}
-                >
-                  <ChevronLeft className="h-4 w-4 mr-1" /> Previous
-                </Button>
-                <div className="flex items-center gap-1">
-                  {Array.from({ length: Math.min(5, totalPages) }).map((_, i) => {
-                    // Simple pagination display: first 5 pages for now
-                    const p = i + 1;
-                    return (
-                      <Button
-                        key={p}
-                        variant={page === p ? "default" : "ghost"}
-                        size="icon"
-                        className="h-8 w-8 text-xs"
-                        onClick={() => handlePageChange(p)}
-                      >
-                        {p}
-                      </Button>
-                    );
-                  })}
-                  {totalPages > 5 && <span className="px-2 text-muted-foreground">...</span>}
-                </div>
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  onClick={() => handlePageChange(page + 1)} 
-                  disabled={page === totalPages}
-                >
-                  Next <ChevronRight className="h-4 w-4 ml-1" />
-                </Button>
-              </div>
-            </div>
-          )}
+          <DataTable 
+            columns={columns} 
+            data={calls} 
+            searchKey="contact_phone" 
+            searchPlaceholder="Search phone numbers..." 
+            onRowClick={(r) => navigate(`/calls/${r.id}`)}
+            page={page}
+            pageSize={20}
+            totalCount={total}
+            onPageChange={handlePageChange}
+          />
         </div>
       ) : (
         <EmptyState icon={PhoneCall} title="No calls found" description="Adjust your filters or start a campaign to see call logs." />

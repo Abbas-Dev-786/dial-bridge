@@ -1,4 +1,4 @@
-import { Bot, Megaphone, Rocket, Zap } from "lucide-react";
+import { Bot, Megaphone, Rocket } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
 

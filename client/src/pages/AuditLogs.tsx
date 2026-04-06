@@ -21,6 +21,7 @@ import { toast } from "sonner";
 import { format, subDays } from "date-fns";
 import { DatePickerWithRange } from "@/components/shared/DateRangePicker";
 import { DateRange } from "react-day-picker";
+import { DataTable, Column } from "@/components/shared/DataTable";
 
 interface AuditLog {
   id: string;
@@ -127,6 +128,91 @@ export default function AuditLogs() {
     return "bg-muted text-muted-foreground border-muted-foreground/20";
   };
 
+  const columns: Column<AuditLog>[] = [
+    {
+      key: "created_at",
+      label: "Date",
+      sortable: true,
+      render: (r) => (
+        <span className="text-[10px] font-mono text-muted-foreground">
+          {new Date(r.created_at).toLocaleString()}
+        </span>
+      ),
+    },
+    {
+      key: "actor_user_id",
+      label: "Actor",
+      render: (r) => (
+        <div className="flex items-center gap-2">
+          <UserIcon className="h-3 w-3 text-muted-foreground" />
+          <span className="text-xs font-semibold truncate">
+            {getActorName(r.actor_user_id, r.actor_type)}
+          </span>
+        </div>
+      ),
+    },
+    {
+      key: "action",
+      label: "Action",
+      render: (r) => (
+        <Badge
+          variant="outline"
+          className={`text-[10px] font-mono uppercase px-1.5 h-5 ${getActionColor(r.action)}`}
+        >
+          {r.action.replace("_", " ")}
+        </Badge>
+      ),
+    },
+    {
+      key: "resource_type",
+      label: "Resource",
+      hideOnMobile: true,
+      render: (r) => (
+        <Badge
+          variant="secondary"
+          className="text-[10px] font-bold h-5 px-1.5 capitalize border-none bg-muted/50"
+        >
+          {r.resource_type.replace("_", " ")}
+        </Badge>
+      ),
+    },
+    {
+      key: "resource_id",
+      label: "ID",
+      hideOnMobile: true,
+      render: (r) => (
+        <span className="text-[10px] font-mono text-muted-foreground opacity-40 select-all">
+          {r.resource_id}
+        </span>
+      ),
+    },
+  ];
+
+  const renderExpandedRow = (event: AuditLog) => (
+    <div className="p-4 ml-8 mr-4">
+      <div className="rounded-lg bg-muted/50 border p-4 space-y-3">
+        <div className="flex justify-between items-center text-[10px] uppercase font-bold text-muted-foreground tracking-wider mb-2">
+          <span>Audit Details</span>
+          <span className="font-mono opacity-50">ID: {event.id}</span>
+        </div>
+        {event.diff && Object.keys(event.diff).length > 0 ? (
+          <div>
+            <p className="text-[10px] font-bold text-muted-foreground mb-2">
+              CHANGES
+            </p>
+            <pre className="text-[11px] font-mono text-foreground whitespace-pre-wrap break-all bg-card p-3 rounded border">
+              {JSON.stringify(event.diff, null, 2)}
+            </pre>
+          </div>
+        ) : (
+          <p className="text-[10px] italic text-muted-foreground text-center py-2">
+            No data detail for this event.
+          </p>
+        )}
+      </div>
+    </div>
+  );
+
   return (
     <div className="space-y-6 pb-12">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-card p-4 rounded-xl border shadow-sm">
@@ -204,107 +290,17 @@ export default function AuditLogs() {
             </p>
           </div>
         ) : (
-          logs.map((event) => (
-            <div
-              key={event.id}
-              className="border-b last:border-b-0 hover:bg-muted/30 transition-colors"
-            >
-              <button
-                className="w-full flex items-center gap-3 px-4 py-3 text-left"
-                onClick={() =>
-                  setExpandedId(expandedId === event.id ? null : event.id)
-                }
-              >
-                {expandedId === event.id ? (
-                  <ChevronDown className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                ) : (
-                  <ChevronRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                )}
-                <span className="text-[10px] font-mono text-muted-foreground w-32 shrink-0 hidden sm:block">
-                  {new Date(event.created_at).toLocaleString()}
-                </span>
-                <div className="flex items-center gap-2 w-40 shrink-0">
-                  <UserIcon className="h-3 w-3 text-muted-foreground" />
-                  <span className="text-xs font-semibold truncate">
-                    {getActorName(event.actor_user_id, event.actor_type)}
-                  </span>
-                </div>
-                <Badge
-                  variant="outline"
-                  className={`text-[10px] font-mono uppercase px-1.5 h-5 ${getActionColor(event.action)}`}
-                >
-                  {event.action.replace("_", " ")}
-                </Badge>
-                <span className="flex-1" />
-                <Badge
-                  variant="secondary"
-                  className="text-[10px] font-bold h-5 px-1.5 capitalize hidden md:inline-flex border-none bg-muted/50"
-                >
-                  {event.resource_type.replace("_", " ")}
-                </Badge>
-                <span className="text-[10px] font-mono text-muted-foreground hidden lg:block opacity-40 select-all">
-                  {event.resource_id}
-                </span>
-              </button>
-              {expandedId === event.id && (
-                <div className="px-4 pb-4 ml-8 mr-4 animate-in slide-in-from-top-1">
-                  <div className="rounded-lg bg-muted/50 border p-4 space-y-3">
-                    <div className="flex justify-between items-center text-[10px] uppercase font-bold text-muted-foreground tracking-wider mb-2">
-                      <span>Audit Details</span>
-                      <span className="font-mono opacity-50">
-                        ID: {event.id}
-                      </span>
-                    </div>
-                    {event.diff && Object.keys(event.diff).length > 0 ? (
-                      <div>
-                        <p className="text-[10px] font-bold text-muted-foreground mb-2">
-                          CHANGES
-                        </p>
-                        <pre className="text-[11px] font-mono text-foreground whitespace-pre-wrap break-all bg-card p-3 rounded border">
-                          {JSON.stringify(event.diff, null, 2)}
-                        </pre>
-                      </div>
-                    ) : (
-                      <p className="text-[10px] italic text-muted-foreground text-center py-2">
-                        No data detail for this event.
-                      </p>
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
-          ))
+          <DataTable
+            columns={columns}
+            data={logs}
+            expandableRowRender={renderExpandedRow}
+            page={page}
+            pageSize={20}
+            totalCount={total}
+            onPageChange={setPage}
+            className="border-none shadow-none space-y-0"
+          />
         )}
-      </div>
-
-      <div className="flex items-center justify-between px-2 text-xs text-muted-foreground">
-        <div className="flex items-center gap-2">
-          <span>Page {page}</span>
-          <span className="opacity-40">|</span>
-          <span>
-            Showing {logs.length} of {total} events
-          </span>
-        </div>
-        <div className="flex gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-8 text-xs font-bold px-3"
-            disabled={page === 1 || isLoading}
-            onClick={() => setPage((p) => p - 1)}
-          >
-            Previous
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-8 text-xs font-bold px-3"
-            disabled={!hasNext || isLoading}
-            onClick={() => setPage((p) => p + 1)}
-          >
-            Next
-          </Button>
-        </div>
       </div>
     </div>
   );

@@ -5,11 +5,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Search, Download, Upload, UserPlus, Edit, Trash2, CheckCircle, XCircle, ChevronLeft, ChevronRight, Ban } from "lucide-react";
+import { Search, Download, Upload, UserPlus, Edit, Trash2, CheckCircle, XCircle, ChevronLeft, ChevronRight, Ban, PhoneCall } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useCampaignStore } from "@/store/useCampaignStore";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
+import { DataTable, Column } from "@/components/shared/DataTable";
+import { EmptyState } from "@/components/shared/EmptyState";
 
 type ContactStatus = "pending" | "calling" | "called" | "failed" | "opted_out" | "do_not_call";
 
@@ -102,6 +104,80 @@ export function ContactsTab() {
     fetchContacts(id, { page, page_size: contactsData.page_size, search: contactSearch, status: contactStatusFilter !== "all" ? [contactStatusFilter] : undefined });
   };
 
+  const columns: Column<any>[] = [
+    {
+      key: "full_name",
+      label: "Name",
+      render: (r) => editingContactId === r.id ? (
+        <Input className="h-8 text-sm" value={editForm.full_name} onChange={e => setEditForm(p => ({ ...p, full_name: e.target.value }))} />
+      ) : (
+        <span className="font-medium">{r.full_name}</span>
+      )
+    },
+    {
+      key: "phone",
+      label: "Phone",
+      hideOnMobile: true,
+      render: (r) => editingContactId === r.id ? (
+        <Input className="h-8 text-sm font-mono" value={editForm.phone} onChange={e => setEditForm(p => ({ ...p, phone: e.target.value }))} />
+      ) : (
+        <span className="font-mono text-xs">{r.phone}</span>
+      )
+    },
+    {
+      key: "status",
+      label: "Status",
+      hideOnMobile: true,
+      render: (r) => (
+        <Badge variant="secondary" className={cn("text-xs capitalize", contactStatusColors[r.status])}>
+          {r.status === "do_not_call" ? "DNC" : r.status.replace("_", " ")}
+        </Badge>
+      )
+    },
+    {
+      key: "next_retry_at",
+      label: "Next Retry",
+      hideOnMobile: true,
+      render: (r) => (
+        <span className="text-xs text-muted-foreground">
+          {r.status === "failed" && r.next_retry_at ? format(new Date(r.next_retry_at), "MMM d, HH:mm") : "-"}
+        </span>
+      )
+    },
+    {
+      key: "actions",
+      label: "Actions",
+      render: (r) => (
+        <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
+          {editingContactId === r.id ? (
+            <>
+              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleSave(r.id)}>
+                <CheckCircle className="h-3.5 w-3.5 text-success" />
+              </Button>
+              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setEditingContactId(null)}>
+                <XCircle className="h-3.5 w-3.5 text-muted-foreground" />
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleEdit(r)}>
+                <Edit className="h-3.5 w-3.5" />
+              </Button>
+              {!r.is_dnc && (
+                <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-warning" onClick={() => handleMarkDNC(r.id)}>
+                  <Ban className="h-3.5 w-3.5" />
+                </Button>
+              )}
+              <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive" onClick={() => handleDelete(r.id)}>
+                <Trash2 className="h-3.5 w-3.5" />
+              </Button>
+            </>
+          )}
+        </div>
+      )
+    }
+  ];
+
   return (
     <div className="space-y-4">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -138,94 +214,22 @@ export function ContactsTab() {
         </div>
       </div>
 
-      <div className="rounded-xl border shadow-sm overflow-x-auto">
-        <Table>
-          <TableHeader>
-            <TableRow className="bg-muted/40 hover:bg-muted/40">
-              <TableHead className="text-xs font-semibold uppercase tracking-wider">Name</TableHead>
-              <TableHead className="hidden sm:table-cell text-xs font-semibold uppercase tracking-wider">Phone</TableHead>
-              <TableHead className="hidden md:table-cell text-xs font-semibold uppercase tracking-wider">Status</TableHead>
-              <TableHead className="hidden lg:table-cell text-xs font-semibold uppercase tracking-wider">Next Retry</TableHead>
-              <TableHead className="text-xs font-semibold uppercase tracking-wider w-[120px]">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {contactsData.items.map((contact) => (
-              <TableRow key={contact.id} className="transition-colors hover:bg-accent/50">
-                {editingContactId === contact.id ? (
-                  <>
-                    <TableCell><Input className="h-8 text-sm" value={editForm.full_name} onChange={e => setEditForm(p => ({ ...p, full_name: e.target.value }))} /></TableCell>
-                    <TableCell className="hidden sm:table-cell"><Input className="h-8 text-sm font-mono" value={editForm.phone} onChange={e => setEditForm(p => ({ ...p, phone: e.target.value }))} /></TableCell>
-                    <TableCell><Badge variant="secondary" className={cn("text-xs capitalize", contactStatusColors[contact.status])}>{contact.status.replace("_", " ")}</Badge></TableCell>
-                    <TableCell className="hidden lg:table-cell">-</TableCell>
-                    <TableCell>
-                      <div className="flex gap-1">
-                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleSave(contact.id)}>
-                          <CheckCircle className="h-3.5 w-3.5 text-success" />
-                        </Button>
-                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setEditingContactId(null)}>
-                          <XCircle className="h-3.5 w-3.5 text-muted-foreground" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </>
-                ) : (
-                  <>
-                    <TableCell><span className="font-medium">{contact.full_name}</span></TableCell>
-                    <TableCell className="hidden sm:table-cell"><span className="font-mono text-xs">{contact.phone}</span></TableCell>
-                    <TableCell className="hidden md:table-cell"><Badge variant="secondary" className={cn("text-xs capitalize", contactStatusColors[contact.status])}>{contact.status === "do_not_call" ? "DNC" : contact.status.replace("_", " ")}</Badge></TableCell>
-                    <TableCell className="hidden lg:table-cell">
-                      <span className="text-xs text-muted-foreground">
-                        {contact.status === "failed" && contact.next_retry_at ? format(new Date(contact.next_retry_at), "MMM d, HH:mm") : "-"}
-                      </span>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex gap-1">
-                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleEdit(contact)}>
-                          <Edit className="h-3.5 w-3.5" />
-                        </Button>
-                        {!contact.is_dnc && (
-                          <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-warning" onClick={() => handleMarkDNC(contact.id)}>
-                            <Ban className="h-3.5 w-3.5" />
-                          </Button>
-                        )}
-                        <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive" onClick={() => handleDelete(contact.id)}>
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </>
-                )}
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </div>
-
-      {contactsData.total > contactsData.page_size && (
-        <div className="flex items-center justify-between py-4">
-          <p className="text-xs text-muted-foreground">
-            Showing {(contactsData.page - 1) * contactsData.page_size + 1} to {Math.min(contactsData.page * contactsData.page_size, contactsData.total)} of {contactsData.total}
-          </p>
-          <div className="flex gap-2">
-            <Button 
-              variant="outline" 
-              size="sm" 
-              disabled={contactsData.page <= 1}
-              onClick={() => setPage(contactsData.page - 1)}
-            >
-              <ChevronLeft className="h-4 w-4 mr-1" /> Previous
-            </Button>
-            <Button 
-              variant="outline" 
-              size="sm" 
-              disabled={!contactsData.has_next}
-              onClick={() => setPage(contactsData.page + 1)}
-            >
-              Next <ChevronRight className="h-4 w-4 ml-1" />
-            </Button>
-          </div>
-        </div>
+      {contactsData.items.length > 0 ? (
+        <DataTable
+          columns={columns}
+          data={contactsData.items}
+          page={contactsData.page}
+          pageSize={contactsData.page_size}
+          totalCount={contactsData.total}
+          onPageChange={setPage}
+          className="border rounded-xl shadow-sm overflow-hidden"
+        />
+      ) : (
+        <EmptyState 
+          icon={PhoneCall} 
+          title="No contacts found" 
+          description="Upload a CSV or add contacts manually to start calling." 
+        />
       )}
     </div>
   );

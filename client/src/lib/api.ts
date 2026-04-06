@@ -67,12 +67,15 @@ export const setupInterceptors = (
         try {
           const newToken = await onRefresh();
           if (newToken) {
-            originalRequest.headers.Authorization = `Bearer ${newToken}`;
+            // Update the Authorization header with the new token
+            if (originalRequest.headers) {
+              originalRequest.headers.Authorization = `Bearer ${newToken}`;
+            }
             processQueue(null, newToken);
             return api(originalRequest);
           } else {
             onLogout();
-            processQueue(new Error("Refresh failed"), null);
+            processQueue(new Error("Token refresh failed"), null);
             return Promise.reject(error);
           }
         } catch (refreshError) {

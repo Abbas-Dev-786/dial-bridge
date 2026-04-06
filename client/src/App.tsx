@@ -28,6 +28,8 @@ import SettingsTeam from "@/pages/SettingsTeam";
 import SettingsBilling from "@/pages/SettingsBilling";
 import SettingsAPI from "@/pages/SettingsAPI";
 import SettingsNotifications from "@/pages/SettingsNotifications";
+import AcceptInvite from "@/pages/AcceptInvite";
+import OAuthCallback from "@/pages/OAuthCallback";
 import NotFound from "@/pages/NotFound";
 import LandingPage from "@/pages/LandingPage";
 import { SettingsLayout } from "@/components/settings/SettingsLayout";
@@ -70,11 +72,13 @@ const App = () => (
                 <Route path="/calls/:id" element={<CallDetail />} />
                 <Route path="/phone-numbers" element={<PhoneNumbers />} />
                 <Route path="/integrations" element={<Integrations />} />
+                <Route path="/integrations/oauth/callback" element={<OAuthCallback />} />
                 <Route
                   path="/integrations/webhooks"
                   element={<WebhookLogs />}
                 />
                 <Route path="/audit-logs" element={<AuditLogs />} />
+                <Route path="/accept-invite/:token" element={<AcceptInvite />} />
 
                 {/* Settings with shared layout */}
                 <Route element={<SettingsLayout />}>

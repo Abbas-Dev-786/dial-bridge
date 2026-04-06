@@ -5,7 +5,7 @@ from sqlalchemy import select
 
 from app.dependencies import get_db, get_current_user, get_workspace_member, require_role
 from app.models.user import User
-from app.models.workspace import WorkspaceMember, Workspace
+from app.models.workspace import WorkspaceMember
 from app.enums import WorkspaceRole, DocType
 from app.schemas.knowledge import (
     KBDocumentAddURL, 
@@ -54,9 +54,6 @@ async def add_file_document(
     The file is uploaded directly to ElevenLabs and not stored locally.
     """
     campaign = await campaign_service.get_campaign(db, workspace_id, campaign_id)
-    result = await db.execute(select(Workspace).where(Workspace.id == workspace_id))
-    workspace = result.scalar_one()
-    
     # Determine DocType from extension
     ext = file.filename.split(".")[-1].lower() if "." in file.filename else ""
     if ext == "pdf":
@@ -70,7 +67,7 @@ async def add_file_document(
         
     file_bytes = await file.read()
     return await kb_service.add_file_document(
-        db, campaign, workspace, current_user.id, file_bytes, file.filename, doc_type
+        db, campaign, current_user.id, file_bytes, file.filename, doc_type
     )
 
 @router.delete("/{workspace_id}/campaigns/{campaign_id}/knowledge/{doc_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -83,9 +80,7 @@ async def delete_knowledge_document(
 ):
     """Remove a knowledge base document from the campaign and ElevenLabs."""
     campaign = await campaign_service.get_campaign(db, workspace_id, campaign_id)
-    result = await db.execute(select(Workspace).where(Workspace.id == workspace_id))
-    workspace = result.scalar_one()
-    await kb_service.delete_document(db, campaign, workspace, doc_id)
+    await kb_service.delete_document(db, campaign, doc_id)
 
 @router.get("/{workspace_id}/campaigns/{campaign_id}/knowledge/sync-status", response_model=KBSyncStatusResponse)
 async def get_sync_status(
@@ -107,9 +102,7 @@ async def trigger_sync(
 ):
     """Manually trigger a synchronization of the knowledge base with ElevenLabs."""
     campaign = await campaign_service.get_campaign(db, workspace_id, campaign_id)
-    result = await db.execute(select(Workspace).where(Workspace.id == workspace_id))
-    workspace = result.scalar_one()
-    await kb_service.sync_campaign_kb(db, campaign, workspace)
+    await kb_service.sync_campaign_kb(db, campaign)
     return await kb_service.get_kb_sync_status(db, campaign)
 
 @router.get("/{workspace_id}/campaigns/{campaign_id}/knowledge/snapshots", response_model=list[KBSnapshotResponse])

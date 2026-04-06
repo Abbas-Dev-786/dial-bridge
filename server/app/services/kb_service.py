@@ -78,15 +78,11 @@ async def add_file_document(
     db.add(doc)
     await db.flush() # Get doc ID
     
-    # 2. Immediately upload to EL
+    # 2. Immediately upload to EL (standalone)
     from app.services.elevenlabs_client import ElevenLabsClient
     async with ElevenLabsClient() as client:
         try:
-            response = await client.add_file_to_kb(
-                agent.elevenlabs_agent_id, 
-                file_bytes, 
-                filename
-            )
+            response = await client.add_file_to_kb(file_bytes, filename)
             # 3. Store the returned elevenlabs_kb_id
             doc.elevenlabs_kb_id = response.get("id")
             doc.status = DocStatus.ready
@@ -96,7 +92,10 @@ async def add_file_document(
             doc.error_message = str(e)
             raise ElevenLabsError(f"Failed to upload file to ElevenLabs: {str(e)}")
     
-    # 4. Set campaign.kb_sync_status = pending (since we might have other pending items)
+    # 4. Trigger Agent Update to link this new document
+    await _trigger_agent_sync(db, campaign)
+    
+    # 5. Set campaign.kb_sync_status = pending (since we might have other pending items)
     campaign.kb_sync_status = KBSyncStatus.pending
     db.add(campaign)
     
@@ -127,23 +126,23 @@ async def delete_document(
     if campaign.status == CampaignStatus.live:
         raise ConflictError("Pause the campaign before removing knowledge base documents.")
     
-    # 3. If doc.elevenlabs_kb_id is not NULL, call EL to remove it
+    # 3. If doc.elevenlabs_kb_id is not NULL, call EL to remove it (standalone)
     if doc.elevenlabs_kb_id:
-        result = await db.execute(select(Agent).where(Agent.id == campaign.agent_id))
-        agent = result.scalar_one_or_none()
-        if agent and agent.elevenlabs_agent_id:
-            from app.services.elevenlabs_client import ElevenLabsClient
-            async with ElevenLabsClient() as client:
-                try:
-                    await client.delete_kb_document(agent.elevenlabs_agent_id, doc.elevenlabs_kb_id)
-                except Exception:
-                    # We log but continue, the sync algorithm should clean up orphans anyway
-                    pass
+        from app.services.elevenlabs_client import ElevenLabsClient
+        async with ElevenLabsClient() as client:
+            try:
+                await client.delete_kb_document(doc.elevenlabs_kb_id)
+            except Exception:
+                # We log but continue
+                pass
     
     # 4. Soft-delete
     doc.deleted_at = datetime.now()
     
-    # 5. Set campaign.kb_sync_status = pending
+    # 5. Trigger Agent Update to unlink this document
+    await _trigger_agent_sync(db, campaign)
+    
+    # 6. Set campaign.kb_sync_status = pending
     campaign.kb_sync_status = KBSyncStatus.pending
     db.add(campaign)
     await db.commit()
@@ -167,11 +166,7 @@ async def sync_campaign_kb(db: AsyncSession, campaign: Campaign) -> None:
     from app.services.elevenlabs_client import ElevenLabsClient
     async with ElevenLabsClient() as client:
         try:
-            # 3. Fetch current EL KB docs for this agent
-            el_docs = await client.list_kb_documents(agent.elevenlabs_agent_id)
-            el_doc_ids = {d["id"] for d in el_docs}
-
-            # 4. Fetch our campaign's KB docs (non-deleted)
+            # 3. Fetch our campaign's KB docs (non-deleted)
             result = await db.execute(
                 select(KnowledgeDocument).where(
                     and_(
@@ -181,24 +176,14 @@ async def sync_campaign_kb(db: AsyncSession, campaign: Campaign) -> None:
                 )
             )
             our_docs = result.scalars().all()
-            our_el_ids = {d.elevenlabs_kb_id for d in our_docs if d.elevenlabs_kb_id}
 
-            # 5. Delete from EL any docs not in our campaign
-            to_delete = el_doc_ids - our_el_ids
-            for el_id in to_delete:
-                try:
-                    await client.delete_kb_document(agent.elevenlabs_agent_id, el_id)
-                except Exception:
-                    pass # Non-fatal
-
-            # 6. Upload docs that don't have an elevenlabs_kb_id yet (URLs)
+            # 4. Upload docs that don't have an elevenlabs_kb_id yet (URLs)
             any_failed = False
             for doc in our_docs:
                 if doc.elevenlabs_kb_id is None:
                     try:
                         if doc.doc_type == DocType.url_scrape:
                             response = await client.add_url_to_kb(
-                                agent.elevenlabs_agent_id, 
                                 doc.source_url, 
                                 doc.name
                             )
@@ -207,7 +192,6 @@ async def sync_campaign_kb(db: AsyncSession, campaign: Campaign) -> None:
                             doc.last_synced_at = datetime.now()
                         else:
                             # File docs should have been uploaded at add time.
-                            # If somehow missing here, we mark as failed.
                             doc.status = DocStatus.failed
                             doc.error_message = "File content missing for synchronization."
                             any_failed = True
@@ -217,6 +201,9 @@ async def sync_campaign_kb(db: AsyncSession, campaign: Campaign) -> None:
                         any_failed = True
                 
                 db.add(doc)
+
+            # 5. Trigger Agent Update to reconcile linked knowledge base
+            await _trigger_agent_sync(db, campaign)
 
             # 7. Finalize status
             if any_failed:
@@ -311,3 +298,26 @@ async def get_snapshot(db: AsyncSession, campaign_id: uuid.UUID, snapshot_id: uu
     if not snapshot:
         raise NotFoundError("CampaignKBSnapshot")
     return snapshot
+
+async def _trigger_agent_sync(db: AsyncSession, campaign: Campaign):
+    """
+    Internal helper to push current knowledge base IDs to the ElevenLabs agent.
+    """
+    if not campaign.agent_id:
+        return
+
+    try:
+        from app.services import agent_service
+        from app.schemas.agent import AgentUpdate
+        
+        # Fetch fully loaded agent and workspace
+        workspace = await db.get(Workspace, campaign.workspace_id)
+        agent = await db.get(Agent, campaign.agent_id)
+        
+        if agent and workspace:
+            # Trigger update (even with empty data) which will internalize KB docs
+            await agent_service.update_agent(db, workspace, agent, AgentUpdate())
+    except Exception as e:
+        # We don't want to fail the primary document operation if sync fails,
+        # but we should log it or handle accordingly.
+        print(f"Failed to trigger agent sync: {e}")

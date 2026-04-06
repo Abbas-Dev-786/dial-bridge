@@ -17,6 +17,7 @@ def build_elevenlabs_agent_payload(
     conversation_config: AgentConversationConfig,
     tools: list[AgentTool],
     workspace_id: UUID,
+    knowledge_documents: list = None,
 ) -> dict:
     """
     Builds the JSON payload for ElevenLabs POST/PATCH /convai/agents.
@@ -31,6 +32,15 @@ def build_elevenlabs_agent_payload(
                     "llm": agent.llm_model,
                     "temperature": float(agent.temperature),
                     "max_tokens": agent.max_tokens,
+                    "knowledge_base": [
+                        {
+                            "id": doc.elevenlabs_kb_id,
+                            "type": "url" if str(doc.doc_type) == "url_scrape" else "file",
+                            "name": doc.name
+                        }
+                        for doc in (knowledge_documents or [])
+                        if doc.elevenlabs_kb_id
+                    ]
                 },
                 "first_message": agent.first_message or "",
                 "language": conversation_config.language,
@@ -142,9 +152,11 @@ async def create_agent(db: AsyncSession, workspace: Workspace, user: User, data:
     await db.refresh(agent, ["voice_config", "conversation_config", "tools"])
 
     # 5. Build ElevenLabs payload & Call
+    # For now, a new agent has no docs attached yet.
     payload = build_elevenlabs_agent_payload(
         agent, agent.voice_config, agent.conversation_config, agent.tools,
-        workspace_id=workspace.id
+        workspace_id=workspace.id,
+        knowledge_documents=[]
     )
     
     try:
@@ -208,9 +220,15 @@ async def update_agent(db: AsyncSession, workspace: Workspace, agent: Agent, dat
     await db.flush()
     
     # Sync to ElevenLabs
+    from app.models.knowledge import KnowledgeDocument
+    from app.models.campaign import Campaign
+    kb_stmt = select(KnowledgeDocument).join(Campaign).where(Campaign.agent_id == agent.id)
+    kb_docs = (await db.execute(kb_stmt)).scalars().all()
+
     payload = build_elevenlabs_agent_payload(
         agent, agent.voice_config, agent.conversation_config, agent.tools,
-        workspace_id=workspace.id
+        workspace_id=workspace.id,
+        knowledge_documents=kb_docs
     )
     
     from app.services.elevenlabs_client import ElevenLabsClient
@@ -236,9 +254,15 @@ async def update_voice_config(db: AsyncSession, workspace: Workspace, agent: Age
     await db.flush()
     
     # Sync to ElevenLabs
+    from app.models.knowledge import KnowledgeDocument
+    from app.models.campaign import Campaign
+    kb_stmt = select(KnowledgeDocument).join(Campaign).where(Campaign.agent_id == agent.id)
+    kb_docs = (await db.execute(kb_stmt)).scalars().all()
+
     payload = build_elevenlabs_agent_payload(
         agent, agent.voice_config, agent.conversation_config, agent.tools,
-        workspace_id=workspace.id
+        workspace_id=workspace.id,
+        knowledge_documents=kb_docs
     )
     
     from app.services.elevenlabs_client import ElevenLabsClient
@@ -260,9 +284,15 @@ async def update_conversation_config(db: AsyncSession, workspace: Workspace, age
     await db.flush()
     
     # Sync to ElevenLabs
+    from app.models.knowledge import KnowledgeDocument
+    from app.models.campaign import Campaign
+    kb_stmt = select(KnowledgeDocument).join(Campaign).where(Campaign.agent_id == agent.id)
+    kb_docs = (await db.execute(kb_stmt)).scalars().all()
+
     payload = build_elevenlabs_agent_payload(
         agent, agent.voice_config, agent.conversation_config, agent.tools,
-        workspace_id=workspace.id
+        workspace_id=workspace.id,
+        knowledge_documents=kb_docs
     )
     
     from app.services.elevenlabs_client import ElevenLabsClient
@@ -287,9 +317,15 @@ async def add_tool(db: AsyncSession, workspace: Workspace, agent: Agent, data: A
     await db.refresh(agent, ["tools"])
     
     # Sync to ElevenLabs
+    from app.models.knowledge import KnowledgeDocument
+    from app.models.campaign import Campaign
+    kb_stmt = select(KnowledgeDocument).join(Campaign).where(Campaign.agent_id == agent.id)
+    kb_docs = (await db.execute(kb_stmt)).scalars().all()
+
     payload = build_elevenlabs_agent_payload(
         agent, agent.voice_config, agent.conversation_config, agent.tools,
-        workspace_id=workspace.id
+        workspace_id=workspace.id,
+        knowledge_documents=kb_docs
     )
     
     from app.services.elevenlabs_client import ElevenLabsClient
@@ -316,9 +352,15 @@ async def update_tool(db: AsyncSession, workspace: Workspace, agent: Agent, tool
     await db.flush()
     
     # Sync to ElevenLabs
+    from app.models.knowledge import KnowledgeDocument
+    from app.models.campaign import Campaign
+    kb_stmt = select(KnowledgeDocument).join(Campaign).where(Campaign.agent_id == agent.id)
+    kb_docs = (await db.execute(kb_stmt)).scalars().all()
+
     payload = build_elevenlabs_agent_payload(
         agent, agent.voice_config, agent.conversation_config, agent.tools,
-        workspace_id=workspace.id
+        workspace_id=workspace.id,
+        knowledge_documents=kb_docs
     )
     
     from app.services.elevenlabs_client import ElevenLabsClient
@@ -344,9 +386,15 @@ async def delete_tool(db: AsyncSession, workspace: Workspace, agent: Agent, tool
     await db.refresh(agent, ["tools"])
     
     # Sync to ElevenLabs
+    from app.models.knowledge import KnowledgeDocument
+    from app.models.campaign import Campaign
+    kb_stmt = select(KnowledgeDocument).join(Campaign).where(Campaign.agent_id == agent.id)
+    kb_docs = (await db.execute(kb_stmt)).scalars().all()
+
     payload = build_elevenlabs_agent_payload(
         agent, agent.voice_config, agent.conversation_config, agent.tools,
-        workspace_id=workspace.id
+        workspace_id=workspace.id,
+        knowledge_documents=kb_docs
     )
     
     from app.services.elevenlabs_client import ElevenLabsClient

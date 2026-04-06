@@ -7,11 +7,12 @@ ELEVENLABS_BASE_URL = "https://api.elevenlabs.io/v1"
 class ElevenLabsClient:
     def __init__(self):
         # Always uses the platform key from settings
+        # We don't set a global Content-Type here to avoid conflicts with 
+        # multipart/form-data requests (e.g. file uploads).
         self._client = httpx.AsyncClient(
             base_url=settings.elevenlabs_base_url,
             headers={
                 "xi-api-key": settings.elevenlabs_api_key,
-                "Content-Type": "application/json",
             },
             timeout=30.0,
         )
@@ -23,6 +24,10 @@ class ElevenLabsClient:
         await self._client.aclose()
 
     async def _request(self, method: str, path: str, **kwargs) -> dict:
+        # Default to JSON content type if sending a payload and not otherwise specified
+        if "json" in kwargs and "headers" not in kwargs:
+            kwargs["headers"] = {"Content-Type": "application/json"}
+            
         response = await self._client.request(method, path, **kwargs)
         if not response.is_success:
             raise ElevenLabsError(
@@ -55,66 +60,61 @@ class ElevenLabsClient:
 
     async def list_voices(self) -> list[dict]:
         """GET /voices — returns list of available voices for this API key"""
-        data = await self._request("GET", "/v1/voices")
+        data = await self._request("GET", "/voices")
         if isinstance(data, list):
             return data
         return data.get("voices", [])
 
-    # ── Knowledge base endpoints ──────────────────────────────────────
+    # ── Knowledge base endpoints (Standalone) ───────────────────────────
 
-    async def add_url_to_kb(self, agent_id: str, url: str, name: str) -> dict:
+    async def add_url_to_kb(self, url: str, name: str) -> dict:
         """
-        POST /convai/agents/{agent_id}/add-to-knowledge-base
-        Body: { "type": "url", "url": str, "name": str }
-        Returns: { "id": str }
+        POST /convai/knowledge-base/url
+        Returns: { "id": str, "name": str, ... }
         """
         return await self._request(
             "POST",
-            f"/convai/agents/{agent_id}/add-to-knowledge-base",
-            json={"type": "url", "url": url, "name": name},
+            "/convai/knowledge-base/url",
+            json={"url": url, "name": name},
         )
 
-    async def add_text_to_kb(self, agent_id: str, text: str, name: str) -> dict:
+    async def add_text_to_kb(self, text: str, name: str) -> dict:
         """
-        POST /convai/agents/{agent_id}/add-to-knowledge-base
-        Body: { "type": "text", "text": str, "name": str }
+        POST /convai/knowledge-base/text
         """
         return await self._request(
             "POST",
-            f"/convai/agents/{agent_id}/add-to-knowledge-base",
-            json={"type": "text", "text": text, "name": name},
+            "/convai/knowledge-base/text",
+            json={"text": text, "name": name},
         )
 
-    async def add_file_to_kb(self, agent_id: str, file_content: bytes, filename: str) -> dict:
+    async def add_file_to_kb(self, file_content: bytes, filename: str) -> dict:
         """
-        POST /convai/agents/{agent_id}/add-to-knowledge-base (multipart)
-        Used for PDF, DOCX, TXT uploads.
-        Returns: { "id": str }
+        POST /convai/knowledge-base/file (multipart)
+        Returns: { "id": str, "name": str, ... }
         """
+        # Use files parameter to send as multipart/form-data
         response = await self._client.post(
-            f"/convai/agents/{agent_id}/add-to-knowledge-base",
-            content=file_content,
-            headers={
-                "Content-Disposition": f'attachment; filename="{filename}"',
-                "Content-Type": "application/octet-stream",
-            },
+            "/convai/knowledge-base/file",
+            files={"file": (filename, file_content)},
+            data={"name": filename}
         )
         if not response.is_success:
             raise ElevenLabsError(f"{response.status_code} — {response.text[:200]}")
         return response.json() if response.content else {}
 
-    async def delete_kb_document(self, agent_id: str, kb_id: str) -> None:
+    async def delete_kb_document(self, kb_id: str) -> None:
         """
-        DELETE /convai/agents/{agent_id}/knowledge-base/{kb_id}
+        DELETE /convai/knowledge-base/{kb_id}
         """
-        await self._request("DELETE", f"/convai/agents/{agent_id}/knowledge-base/{kb_id}")
+        await self._request("DELETE", f"/convai/knowledge-base/{kb_id}")
 
-    async def list_kb_documents(self, agent_id: str) -> list[dict]:
+    async def list_kb_documents(self) -> list[dict]:
         """
-        GET /convai/agents/{agent_id}/knowledge-base
-        Returns list of documents currently on the EL agent.
+        GET /convai/knowledge-base
+        Returns list of all documents in the account.
         """
-        data = await self._request("GET", f"/convai/agents/{agent_id}/knowledge-base")
+        data = await self._request("GET", "/convai/knowledge-base")
         if isinstance(data, list):
             return data
         return data.get("documents", [])

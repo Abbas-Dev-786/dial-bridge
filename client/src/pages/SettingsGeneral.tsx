@@ -6,62 +6,46 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { CheckCircle, AlertTriangle, Loader2 } from "lucide-react";
-import { workspaceRequest } from "@/lib/api";
 import { toast } from "sonner";
+import { useWorkspaceProfileQuery, useElevenLabsStatusQuery, useUpdateWorkspaceMutation } from "@/hooks/api/useSettings";
 import { DeleteConfirmDialog } from "@/components/dialogs/DeleteConfirmDialog";
 import { useNavigate } from "react-router-dom";
 
 export default function GeneralSettings() {
   const navigate = useNavigate();
-  const [workspace, setWorkspace] = useState<any>(null);
-  const [elevenLabs, setElevenLabs] = useState<any>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isSaving, setIsSaving] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+
+  const { data: workspace, isLoading: isLoadingWorkspace } = useWorkspaceProfileQuery();
+  const { data: elevenLabs, isLoading: isLoadingElevenLabs } = useElevenLabsStatusQuery();
+  const { mutate: updateWorkspace, isPending: isSaving } = useUpdateWorkspaceMutation();
+
+  const isLoading = isLoadingWorkspace || isLoadingElevenLabs;
 
   // Form state
   const [name, setName] = useState("");
   const [timezone, setTimezone] = useState("UTC");
 
   useEffect(() => {
-    async function loadData() {
-      try {
-        const [wsRes, elRes] = await Promise.all([
-          workspaceRequest.get<{ name: string; timezone: string; created_at: string }>(""),
-          workspaceRequest.get<{ is_configured: boolean }>("/settings/elevenlabs-status")
-        ]);
-        setWorkspace(wsRes.data);
-        setElevenLabs(elRes.data);
-        setName(wsRes.data.name);
-        setTimezone(wsRes.data.timezone);
-      } catch (err) {
-        console.error(err);
-        toast.error("Failed to load settings");
-      } finally {
-        setIsLoading(false);
-      }
+    if (workspace) {
+      setName(workspace.name);
+      setTimezone(workspace.timezone);
     }
-    loadData();
-  }, []);
+  }, [workspace]);
 
-  const handleSave = async () => {
-    setIsSaving(true);
-    try {
-      await workspaceRequest.patch("", { name, timezone });
-      toast.success("Settings saved successfully");
-    } catch (err) {
-      console.error(err);
-      toast.error("Failed to save settings");
-    } finally {
-      setIsSaving(false);
-    }
+  const handleSave = () => {
+    updateWorkspace({ name, timezone }, {
+      onSuccess: () => toast.success("Settings saved successfully"),
+      onError: () => toast.error("Failed to save settings")
+    });
   };
 
   const handleDelete = async () => {
     try {
+      // Intentionally using ad-hoc request since it logs out/redirects usually for delete
+      const { workspaceRequest } = await import('@/lib/api');
       await workspaceRequest.delete("");
       toast.success("Workspace deleted");
-      navigate("/workspaces"); // or wherever appropriate
+      navigate("/workspaces");
     } catch (err) {
       console.error(err);
       toast.error("Failed to delete workspace");

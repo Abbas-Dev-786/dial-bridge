@@ -3,27 +3,33 @@ import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { useNavigate, useParams } from "react-router-dom";
 import { useCampaignStore } from "@/store/useCampaignStore";
-import { STATUS_TRANSITIONS, CAMPAIGN_MOCK_DATA } from "@/lib/campaign-constants";
+import { useCampaignDetailQuery, useCampaignMutations } from "@/hooks/api/useCampaigns";
+import { STATUS_TRANSITIONS } from "@/lib/campaign-constants";
 import { useToast } from "@/hooks/use-toast";
 
 export function CampaignHeader() {
   const navigate = useNavigate();
   const { id } = useParams();
   const { toast } = useToast();
-  const { activeCampaign, campaignStatus, transitionStatus, setDialogState } = useCampaignStore();
+  const { setDialogState } = useCampaignStore();
+  
+  const { data: activeCampaign, isLoading } = useCampaignDetailQuery(id);
+  const { transitionStatus } = useCampaignMutations(id);
 
-  const campaign = activeCampaign || { name: `Loading...`, status: "draft" };
+  const campaign = activeCampaign || { name: isLoading ? `Loading...` : `Unknown`, status: "draft" };
+  const campaignStatus = activeCampaign?.status || "draft";
   const isDraft = campaignStatus === "draft";
   const availableTransitions = STATUS_TRANSITIONS[campaignStatus as keyof typeof STATUS_TRANSITIONS] || [];
 
   const onTransition = async (target: any) => {
-    if (!id) return;
-    try {
-      await transitionStatus(id, target);
-      toast({ title: "Status updated", description: `Campaign is now ${target}.` });
-    } catch (error) {
-      toast({ title: "Update failed", description: "Could not update status.", variant: "destructive" });
-    }
+    transitionStatus.mutate(target, {
+      onSuccess: () => {
+        toast({ title: "Status updated", description: `Campaign is now ${target}.` });
+      },
+      onError: () => {
+        toast({ title: "Update failed", description: "Could not update status.", variant: "destructive" });
+      }
+    });
   };
 
   return (

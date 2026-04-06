@@ -1,5 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { usePhoneNumbersQuery } from "@/hooks/api/usePhoneNumbers";
 import { DataTable, Column } from "@/components/shared/DataTable";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { Badge } from "@/components/ui/badge";
@@ -10,7 +11,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ImportSIPDialog } from "@/components/dialogs/ImportSIPDialog";
 import { ImportElevenLabsNumberDialog } from "@/components/dialogs/ImportElevenLabsNumberDialog";
 import { useToast } from "@/hooks/use-toast";
-import { workspaceRequest } from "@/lib/api";
 
 interface PhoneNumberListItem {
   id: string;
@@ -67,31 +67,10 @@ const columns: Column<PhoneNumberListItem>[] = [
 export default function PhoneNumbers() {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const [numbers, setNumbers] = useState<PhoneNumberListItem[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
   const [sipDialogOpen, setSipDialogOpen] = useState(false);
   const [elDialogOpen, setElDialogOpen] = useState(false);
 
-  const fetchNumbers = async () => {
-    setIsLoading(true);
-    try {
-      const res = await workspaceRequest.get<PhoneNumberListItem[]>("/phone-numbers");
-      setNumbers(res.data);
-    } catch (error) {
-      console.error("Failed to fetch phone numbers", error);
-      toast({
-        title: "Error",
-        description: "Failed to load phone numbers. Please try again.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchNumbers();
-  }, []);
+  const { data: numbers = [], isLoading, refetch } = usePhoneNumbersQuery();
 
   return (
     <div className="space-y-6">
@@ -152,7 +131,7 @@ export default function PhoneNumbers() {
         onOpenChange={setElDialogOpen}
         onImported={(count) => {
           toast({ title: "Numbers imported", description: `${count} phone number${count !== 1 ? "s" : ""} imported from ElevenLabs.` });
-          fetchNumbers();
+          refetch();
         }}
       />
     </div>

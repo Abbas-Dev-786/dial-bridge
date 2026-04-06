@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Phone, Loader2, CheckCircle, AlertCircle } from "lucide-react";
-import { workspaceRequest } from "@/lib/api";
+import { useAvailableElevenLabsNumbersQuery, useImportElevenLabsNumberMutation } from "@/hooks/api/usePhoneNumbers";
 import { useToast } from "@/hooks/use-toast";
 
 interface ImportElevenLabsNumberDialogProps {
@@ -23,35 +23,17 @@ interface AvailableNumber {
 
 export function ImportElevenLabsNumberDialog({ open, onOpenChange, onImported }: ImportElevenLabsNumberDialogProps) {
   const { toast } = useToast();
-  const [availableNumbers, setAvailableNumbers] = useState<AvailableNumber[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [isLoading, setIsLoading] = useState(false);
   const [importing, setImporting] = useState(false);
 
+  const { data: availableNumbers = [], isLoading } = useAvailableElevenLabsNumbersQuery(open);
+  const importMutation = useImportElevenLabsNumberMutation();
+
   useEffect(() => {
-    if (open) {
-      fetchAvailableNumbers();
-    } else {
+    if (!open) {
       setSelected(new Set());
     }
   }, [open]);
-
-  const fetchAvailableNumbers = async () => {
-    setIsLoading(true);
-    try {
-      const res = await workspaceRequest.get<AvailableNumber[]>("/phone-numbers/elevenlabs-available");
-      setAvailableNumbers(res.data);
-    } catch (error) {
-      console.error("Failed to fetch available numbers", error);
-      toast({
-        title: "Error",
-        description: "Failed to load available numbers from ElevenLabs.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
   const toggle = (id: string) => {
     setSelected(prev => {
@@ -69,7 +51,7 @@ export function ImportElevenLabsNumberDialog({ open, onOpenChange, onImported }:
     try {
       for (const id of selectedArray) {
         const numberToImport = availableNumbers.find(n => n.elevenlabs_number_id === id);
-        await workspaceRequest.post("/phone-numbers/import-elevenlabs", {
+        await importMutation.mutateAsync({
           elevenlabs_number_id: id,
           friendly_name: numberToImport?.label || ""
         });

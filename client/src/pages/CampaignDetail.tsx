@@ -1,6 +1,6 @@
-import { useEffect } from "react";
 import { useParams } from "react-router-dom";
 import { useCampaignStore } from "@/store/useCampaignStore";
+import { useCampaignDetailQuery, useCampaignMutations } from "@/hooks/api/useCampaigns";
 import { CampaignHeader } from "@/components/campaign-detail/CampaignHeader";
 import { CampaignTabsNav } from "@/components/campaign-detail/CampaignTabsNav";
 import { DashboardTab } from "@/components/campaign-detail/tabs/DashboardTab";
@@ -27,19 +27,20 @@ export default function CampaignDetail() {
     activeTab, 
     dialogStates, 
     setDialogState, 
-    selectedIntegration, 
-    fetchCampaign,
+    selectedIntegration 
+  } = useCampaignStore();
+
+  const { isLoading } = useCampaignDetailQuery(id);
+  const { 
     addContact,
     importContacts,
     uploadKnowledgeFile,
     addKnowledgeUrl
-  } = useCampaignStore();
+  } = useCampaignMutations(id);
 
-  useEffect(() => {
-    if (id) {
-      fetchCampaign(id);
-    }
-  }, [id, fetchCampaign]);
+  if (isLoading) {
+    return <div className="p-8 text-center text-muted-foreground">Loading campaign...</div>;
+  }
 
   const renderTab = () => {
     switch (activeTab) {
@@ -73,8 +74,8 @@ export default function CampaignDetail() {
       <UploadDocumentDialog 
         open={dialogStates.uploadDoc} 
         onOpenChange={(open) => setDialogState("uploadDoc", open)} 
-        onUploadFile={(file) => id && uploadKnowledgeFile(id, file)}
-        onAddUrl={(url) => id && addKnowledgeUrl(id, { url, name: url })}
+        onUploadFile={(file) => uploadKnowledgeFile.mutate(file)}
+        onAddUrl={(url) => addKnowledgeUrl.mutate({ url, name: url })}
       />
       <ConnectIntegrationDialog 
         open={dialogStates.connectIntegration} 
@@ -88,12 +89,12 @@ export default function CampaignDetail() {
       <AddContactDialog 
         open={dialogStates.addContact} 
         onOpenChange={(open) => setDialogState("addContact", open)} 
-        onAdd={(data) => id && addContact(id, data)}
+        onAdd={(data) => addContact.mutate(data)}
       />
       <ImportContactsDialog 
         open={dialogStates.importContacts} 
         onOpenChange={(open) => setDialogState("importContacts", open)} 
-        onImport={(file) => id && importContacts(id, file)}
+        onImport={(file) => importContacts.mutate(file)}
       />
       <ExportDataDialog 
         open={dialogStates.export} 

@@ -1,21 +1,26 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useParams } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Phone, Check, RefreshCw, Plus } from "lucide-react";
 import { workspaceRequest } from "@/lib/api";
 import { useCampaignStore } from "@/store/useCampaignStore";
+import { useCampaignDetailQuery, useCampaignMutations } from "@/hooks/api/useCampaigns";
 import { useToast } from "@/hooks/use-toast";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 
 export function PhonesTab() {
   const { id } = useParams();
-  const { activeCampaign, assignPhone, setDialogState, campaignStatus } = useCampaignStore();
+  const { setDialogState } = useCampaignStore();
+  
+  const { data: activeCampaign } = useCampaignDetailQuery(id);
+  const { assignPhone } = useCampaignMutations(id);
+  const campaignStatus = activeCampaign?.status || "draft";
+
   const { toast } = useToast();
   const [availableNumbers, setAvailableNumbers] = useState<any[]>([]);
   const [isLoadingNumbers, setIsLoadingNumbers] = useState(false);
-  const [isAssigning, setIsAssigning] = useState(false);
   const [open, setOpen] = useState(false);
 
   const currentPhone = activeCampaign?.phone_number;
@@ -32,18 +37,16 @@ export function PhonesTab() {
     }
   };
 
-  const handleAssign = async (numId: string) => {
-    if (!id) return;
-    setIsAssigning(true);
-    try {
-      await assignPhone(id, numId);
-      toast({ title: "Phone number assigned" });
-      setOpen(false);
-    } catch (error) {
-      toast({ title: "Assignment failed", variant: "destructive" });
-    } finally {
-      setIsAssigning(false);
-    }
+  const handleAssign = (numId: string) => {
+    assignPhone.mutate(numId, {
+      onSuccess: () => {
+        toast({ title: "Phone number assigned" });
+        setOpen(false);
+      },
+      onError: () => {
+        toast({ title: "Assignment failed", variant: "destructive" });
+      }
+    });
   };
 
   return (
@@ -104,7 +107,7 @@ export function PhonesTab() {
                           </div>
                           {currentPhone?.id === num.id ? (
                             <Check className="h-4 w-4 text-primary" />
-                          ) : isAssigning ? (
+                          ) : assignPhone.isPending ? (
                             <RefreshCw className="h-4 w-4 animate-spin text-muted-foreground" />
                           ) : null}
                         </div>

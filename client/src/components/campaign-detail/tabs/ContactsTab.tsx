@@ -8,6 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Search, Download, Upload, UserPlus, Edit, Trash2, CheckCircle, XCircle, ChevronLeft, ChevronRight, Ban, PhoneCall } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useCampaignStore } from "@/store/useCampaignStore";
+import { useContactsQuery, useCampaignMutations } from "@/hooks/api/useCampaigns";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import { DataTable, Column } from "@/components/shared/DataTable";
@@ -28,31 +29,22 @@ export function ContactsTab() {
   const { id } = useParams();
   const { toast } = useToast();
   const { 
-    contactsData, 
-    fetchContacts, 
-    addContact, 
-    updateContact, 
-    deleteContact, 
     setDialogState,
-    activeCampaign
   } = useCampaignStore();
 
   const [contactSearch, setContactSearch] = useState("");
   const [contactStatusFilter, setContactStatusFilter] = useState<string>("all");
   const [editingContactId, setEditingContactId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState({ full_name: "", phone: "", email: "", company: "" });
+  const [page, setPage] = useState(1);
+  const pageSize = 50;
 
-  useEffect(() => {
-    if (id) {
-      const params: any = {
-        page: contactsData.page,
-        page_size: contactsData.page_size,
-      };
-      if (contactSearch) params.search = contactSearch;
-      if (contactStatusFilter !== "all") params.status = [contactStatusFilter];
-      fetchContacts(id, params);
-    }
-  }, [id, contactSearch, contactStatusFilter, contactsData.page, contactsData.page_size, fetchContacts]);
+  const params: any = { page, page_size: pageSize };
+  if (contactSearch) params.search = contactSearch;
+  if (contactStatusFilter !== "all") params.status = [contactStatusFilter];
+
+  const { data: contactsData = { items: [], total: 0 } } = useContactsQuery(id, params);
+  const { updateContact, deleteContact } = useCampaignMutations(id);
 
   const handleEdit = (contact: any) => {
     setEditingContactId(contact.id);
@@ -64,44 +56,39 @@ export function ContactsTab() {
     });
   };
 
-  const handleSave = async (contactId: string) => {
+  const handleSave = (contactId: string) => {
     if (!id) return;
     if (!editForm.full_name.trim() || !editForm.phone.trim()) {
       toast({ title: "Missing fields", description: "Name and phone are required.", variant: "destructive" });
       return;
     }
-    try {
-      await updateContact(id, contactId, editForm);
-      setEditingContactId(null);
-      toast({ title: "Contact updated" });
-    } catch (error) {
-      toast({ title: "Update failed", variant: "destructive" });
-    }
+    updateContact.mutate({ contactId, data: editForm }, {
+      onSuccess: () => {
+        setEditingContactId(null);
+        toast({ title: "Contact updated" });
+      },
+      onError: () => toast({ title: "Update failed", variant: "destructive" })
+    });
   };
 
-  const handleDelete = async (contactId: string) => {
+  const handleDelete = (contactId: string) => {
     if (!id) return;
-    try {
-      await deleteContact(id, contactId);
-      toast({ title: "Contact deleted" });
-    } catch (error) {
-      toast({ title: "Delete failed", variant: "destructive" });
-    }
+    deleteContact.mutate(contactId, {
+      onSuccess: () => toast({ title: "Contact deleted" }),
+      onError: () => toast({ title: "Delete failed", variant: "destructive" })
+    });
   };
 
-  const handleMarkDNC = async (contactId: string) => {
+  const handleMarkDNC = (contactId: string) => {
     if (!id) return;
-    try {
-      await updateContact(id, contactId, { is_dnc: true });
-      toast({ title: "Contact marked as DNC" });
-    } catch (error) {
-      toast({ title: "Operation failed", variant: "destructive" });
-    }
+    updateContact.mutate({ contactId, data: { is_dnc: true } }, {
+      onSuccess: () => toast({ title: "Contact marked as DNC" }),
+      onError: () => toast({ title: "Operation failed", variant: "destructive" })
+    });
   };
 
-  const setPage = (page: number) => {
-    if (!id) return;
-    fetchContacts(id, { page, page_size: contactsData.page_size, search: contactSearch, status: contactStatusFilter !== "all" ? [contactStatusFilter] : undefined });
+  const changePage = (newPage: number) => {
+    setPage(newPage);
   };
 
   const columns: Column<any>[] = [
@@ -218,10 +205,10 @@ export function ContactsTab() {
         <DataTable
           columns={columns}
           data={contactsData.items}
-          page={contactsData.page}
-          pageSize={contactsData.page_size}
+          page={page}
+          pageSize={pageSize}
           totalCount={contactsData.total}
-          onPageChange={setPage}
+          onPageChange={changePage}
           className="border rounded-xl shadow-sm overflow-hidden"
         />
       ) : (

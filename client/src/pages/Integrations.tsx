@@ -1,10 +1,10 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Loader2, CheckCircle, Plus, ScrollText } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { workspaceRequest } from "@/lib/api";
+import { useIntegrationProvidersQuery, useWorkspaceIntegrationsQuery, useIntegrationMutations } from "@/hooks/api/useSettings";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { ConnectApiKeyModal } from "@/components/dialogs/ConnectApiKeyModal";
 import { ConnectWebhookModal } from "@/components/dialogs/ConnectWebhookModal";
@@ -31,38 +31,21 @@ interface WorkspaceIntegration {
 export default function Integrations() {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const [providers, setProviders] = useState<Provider[]>([]);
-  const [installed, setInstalled] = useState<WorkspaceIntegration[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
   const [isApiKeyModalOpen, setIsApiKeyModalOpen] = useState(false);
   const [isWebhookModalOpen, setIsWebhookModalOpen] = useState(false);
   const [selectedProvider, setSelectedProvider] = useState<Provider | null>(null);
 
-  const fetchData = async () => {
-    setIsLoading(true);
-    try {
-      const [providersRes, installedRes] = await Promise.all([
-        workspaceRequest.get<Provider[]>("/integrations/providers"),
-        workspaceRequest.get<WorkspaceIntegration[]>("/integrations")
-      ]);
-      setProviders(providersRes.data);
-      setInstalled(installedRes.data);
-    } catch (error) {
-      console.error("Failed to fetch integration data", error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchData();
-  }, []);
+  const { data: providers = [], isLoading: isLoadingProviders } = useIntegrationProvidersQuery();
+  const { data: installed = [], isLoading: isLoadingInstalled, refetch } = useWorkspaceIntegrationsQuery();
+  const { initiateOAuth, disconnectIntegration } = useIntegrationMutations();
+  
+  const isLoading = isLoadingProviders || isLoadingInstalled;
 
   const handleConnect = async (provider: Provider) => {
     if (provider.auth_method === "oauth") {
       try {
-        const res = await workspaceRequest.get<{ authorization_url: string }>(`/integrations/${provider.key}/oauth/initiate`);
-        window.location.href = res.data.authorization_url;
+        const url = await initiateOAuth.mutateAsync(provider.key);
+        window.location.href = url;
       } catch (error) {
         toast({
           title: "OAuth failed",
@@ -79,15 +62,12 @@ export default function Integrations() {
     }
   };
 
-  const handleDisconnect = async (integrationId: string) => {
+  const handleDisconnect = (integrationId: string) => {
     if (!confirm("Are you sure you want to disconnect this integration?")) return;
-    try {
-      await workspaceRequest.delete(`/integrations/${integrationId}`);
-      toast({ title: "Integration disconnected" });
-      fetchData();
-    } catch (error) {
-      toast({ title: "Disconnect failed", variant: "destructive" });
-    }
+    disconnectIntegration.mutate(integrationId, {
+      onSuccess: () => toast({ title: "Integration disconnected" }),
+      onError: () => toast({ title: "Disconnect failed", variant: "destructive" }),
+    });
   };
 
   if (isLoading) {
@@ -156,7 +136,7 @@ export default function Integrations() {
                   </div>
 
                   <div className="mt-5 pt-4 border-t flex gap-2">
-                    <Button variant="outline" size="sm" className="flex-1 text-xs" onClick={() => fetchData()}>
+                    <Button variant="outline" size="sm" className="flex-1 text-xs" onClick={() => refetch()}>
                       Manage
                     </Button>
                     <Button 
@@ -221,14 +201,14 @@ export default function Integrations() {
         open={isApiKeyModalOpen} 
         onOpenChange={setIsApiKeyModalOpen} 
         provider={selectedProvider} 
-        onConnected={fetchData} 
+        onConnected={() => refetch()} 
       />
       
       <ConnectWebhookModal 
         open={isWebhookModalOpen} 
         onOpenChange={setIsWebhookModalOpen} 
         provider={selectedProvider} 
-        onConnected={fetchData} 
+        onConnected={() => refetch()} 
       />
     </div>
   );

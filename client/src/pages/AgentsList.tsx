@@ -1,12 +1,11 @@
 import { useNavigate } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+
 import { DataTable, Column } from "@/components/shared/DataTable";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { Badge } from "@/components/ui/badge";
 import { Bot, Loader2, AlertCircle } from "lucide-react";
 import { EmptyState } from "@/components/shared/EmptyState";
-import { useWorkspaceStore } from "@/store/useWorkspaceStore";
-import api from "@/lib/api";
+import { useAgentsQuery } from "@/hooks/api/useAgents";
 import { Button } from "@/components/ui/button";
 
 interface AgentListItem {
@@ -23,17 +22,8 @@ interface AgentListItem {
 
 export default function AgentsList() {
   const navigate = useNavigate();
-  const { activeWorkspaceId } = useWorkspaceStore();
 
-  const { data: agents = [], isLoading, isError, error, refetch } = useQuery({
-    queryKey: ["agents", activeWorkspaceId],
-    queryFn: async () => {
-      if (!activeWorkspaceId) return [];
-      const response = await api.get(`/api/v1/workspaces/${activeWorkspaceId}/agents`);
-      return response.data as AgentListItem[];
-    },
-    enabled: !!activeWorkspaceId,
-  });
+  const { data: agents = [], isLoading, isError, error, refetch } = useAgentsQuery();
 
   const columns: Column<AgentListItem>[] = [
     { 

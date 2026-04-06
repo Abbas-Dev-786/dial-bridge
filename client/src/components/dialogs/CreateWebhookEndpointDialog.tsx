@@ -4,9 +4,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { workspaceRequest } from "@/lib/api";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
+import { useWebhookMutations } from "@/hooks/api/useSettings";
 
 interface CreateWebhookEndpointDialogProps {
   open: boolean;
@@ -27,7 +27,9 @@ export function CreateWebhookEndpointDialog({ open, onOpenChange, onCreated }: C
   const [description, setDescription] = useState("");
   const [maxRetries, setMaxRetries] = useState(3);
   const [selectedEvents, setSelectedEvents] = useState<Set<string>>(new Set());
-  const [isCreating, setIsCreating] = useState(false);
+
+  const { addWebhook } = useWebhookMutations();
+  const isCreating = addWebhook.isPending;
 
   const toggleEvent = (event: string) => {
     setSelectedEvents(prev => {
@@ -37,34 +39,32 @@ export function CreateWebhookEndpointDialog({ open, onOpenChange, onCreated }: C
     });
   };
 
-  const handleCreate = async () => {
+  const handleCreate = () => {
     if (!url.trim() || selectedEvents.size === 0) {
       toast.error("Please provide a URL and select at least one event");
       return;
     }
     
-    setIsCreating(true);
-    try {
-      await workspaceRequest.post("/webhooks/endpoints", {
-        url: url.trim(),
-        description: description.trim() || null,
-        events: Array.from(selectedEvents),
-        max_retries: maxRetries,
-      });
-      
-      toast.success("Webhook endpoint created successfully");
-      setUrl("");
-      setDescription("");
-      setMaxRetries(3);
-      setSelectedEvents(new Set());
-      onCreated?.();
-      onOpenChange(false);
-    } catch (err) {
-      console.error(err);
-      toast.error("Failed to create webhook endpoint");
-    } finally {
-      setIsCreating(false);
-    }
+    addWebhook.mutate({
+      url: url.trim(),
+      description: description.trim() || null,
+      events: Array.from(selectedEvents),
+      max_retries: maxRetries,
+    }, {
+      onSuccess: () => {
+        toast.success("Webhook endpoint created successfully");
+        setUrl("");
+        setDescription("");
+        setMaxRetries(3);
+        setSelectedEvents(new Set());
+        onCreated?.();
+        onOpenChange(false);
+      },
+      onError: (err) => {
+        console.error(err);
+        toast.error("Failed to create webhook endpoint");
+      }
+    });
   };
 
   return (

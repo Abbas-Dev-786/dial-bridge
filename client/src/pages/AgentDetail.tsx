@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -31,15 +30,12 @@ import {
   AgentConfigCard,
   AgentActiveBanner,
 } from "@/components/agent-detail/AgentConfigCard";
-import { useWorkspaceStore } from "@/store/useWorkspaceStore";
-import api from "@/lib/api";
+import { useAgentDetailQuery, useAgentMutations } from "@/hooks/api/useAgents";
 
 export default function AgentDetail() {
   const navigate = useNavigate();
   const { id } = useParams();
   const { toast } = useToast();
-  const queryClient = useQueryClient();
-  const { activeWorkspaceId } = useWorkspaceStore();
 
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -56,17 +52,9 @@ export default function AgentDetail() {
     isLoading,
     isError,
     error,
-  } = useQuery({
-    queryKey: ["agent", activeWorkspaceId, id],
-    queryFn: async () => {
-      if (!activeWorkspaceId || !id) return null;
-      const response = await api.get(
-        `/api/v1/workspaces/${activeWorkspaceId}/agents/${id}`,
-      );
-      return response.data;
-    },
-    enabled: !!activeWorkspaceId && !!id,
-  });
+  } = useAgentDetailQuery(id);
+  
+  const { updateAgent, deleteAgent } = useAgentMutations(id);
 
   // Initialize form state from fetched data
   useEffect(() => {
@@ -131,105 +119,93 @@ export default function AgentDetail() {
   }, [agent]);
 
   // Mutations
-  const updateMutation = useMutation({
-    mutationFn: async (data: any) => {
-      // Convert frontend structure back to backend structure
-      const payload = {
-        name: data.name,
-        llm_model: data.llm_model,
-        system_prompt: data.system_prompt,
-        first_message: data.voice.firstMessage || data.flow.firstMessage,
-        temperature: data.temperature,
-        max_tokens: data.max_tokens,
-        voice_config: {
-          voice_id: data.voice.voiceId,
-          stability: data.voice.stability[0],
-          similarity_boost: data.voice.similarityBoost[0],
-          style: data.voice.style[0],
-          speed: data.voice.speed[0],
-        },
-        conversation_config: {
-          language: data.flow.language,
-          max_duration_seconds: parseInt(data.flow.maxDuration),
-          end_call_after_silence_secs: parseInt(data.flow.endCallAfterSilence),
-          interruption_sensitivity: data.flow.interruptionSensitivity,
-          turn_endpoint_delay_ms: parseInt(data.flow.turnEndpointDelay),
-          enable_backchannel: data.flow.enableBackchannel,
-          enable_data_collection: data.flow.enableDataCollection,
-          data_collection_fields: data.flow.dataCollectionFields
-            ? JSON.parse(data.flow.dataCollectionFields)
-            : [],
-        },
-        // Tools are handled separately or via complex patching in real world,
-        // but for now we follow the schema
-        tools: [
-          ...data.tools.systemTools.map((name: string) => ({
-            name,
-            tool_type: "system",
-            is_enabled: true,
-          })),
-          ...data.tools.clientTools.map((name: string) => ({
-            name,
-            tool_type: "client",
-            is_enabled: true,
-          })),
-          ...data.tools.serverTools.map((t: any) => ({
-            name: t.name,
-            description: t.description,
-            tool_type: "server",
-            url: t.url,
-            http_method: t.method,
-            headers: t.headers ? JSON.parse(t.headers) : {},
-            is_enabled: true,
-          })),
-        ],
-      };
+  const handleSave = () => {
+    const payload = {
+      name: agentData.name,
+      llm_model: agentData.llm_model,
+      system_prompt: agentData.system_prompt,
+      first_message: agentData.voice.firstMessage || agentData.flow.firstMessage,
+      temperature: agentData.temperature,
+      max_tokens: agentData.max_tokens,
+      voice_config: {
+        voice_id: agentData.voice.voiceId,
+        stability: agentData.voice.stability[0],
+        similarity_boost: agentData.voice.similarityBoost[0],
+        style: agentData.voice.style[0],
+        speed: agentData.voice.speed[0],
+      },
+      conversation_config: {
+        language: agentData.flow.language,
+        max_duration_seconds: parseInt(agentData.flow.maxDuration),
+        end_call_after_silence_secs: parseInt(agentData.flow.endCallAfterSilence),
+        interruption_sensitivity: agentData.flow.interruptionSensitivity,
+        turn_endpoint_delay_ms: parseInt(agentData.flow.turnEndpointDelay),
+        enable_backchannel: agentData.flow.enableBackchannel,
+        enable_data_collection: agentData.flow.enableDataCollection,
+        data_collection_fields: agentData.flow.dataCollectionFields
+          ? JSON.parse(agentData.flow.dataCollectionFields)
+          : [],
+      },
+      tools: [
+        ...agentData.tools.systemTools.map((name: string) => ({
+          name,
+          tool_type: "system",
+          is_enabled: true,
+        })),
+        ...agentData.tools.clientTools.map((name: string) => ({
+          name,
+          tool_type: "client",
+          is_enabled: true,
+        })),
+        ...agentData.tools.serverTools.map((t: any) => ({
+          name: t.name,
+          description: t.description,
+          tool_type: "server",
+          url: t.url,
+          http_method: t.method,
+          headers: t.headers ? JSON.parse(t.headers) : {},
+          is_enabled: true,
+        })),
+      ],
+    };
 
-      const response = await api.patch(
-        `/api/v1/workspaces/${activeWorkspaceId}/agents/${id}`,
-        payload,
-      );
-      return response.data;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: ["agent", activeWorkspaceId, id],
-      });
-      toast({
-        title: "Changes saved",
-        description: "Agent configuration has been updated.",
-      });
-    },
-    onError: (err: any) => {
-      toast({
-        title: "Error saving changes",
-        description:
-          err.response?.data?.detail || "An unexpected error occurred.",
-        variant: "destructive",
-      });
-    },
-  });
+    updateAgent.mutate(payload, {
+      onSuccess: () => {
+        toast({
+          title: "Changes saved",
+          description: "Agent configuration has been updated.",
+        });
+      },
+      onError: (err: any) => {
+        toast({
+          title: "Error saving changes",
+          description:
+            err.response?.data?.detail || "An unexpected error occurred.",
+          variant: "destructive",
+        });
+      }
+    });
+  };
 
-  const deleteMutation = useMutation({
-    mutationFn: async () => {
-      await api.delete(`/api/v1/workspaces/${activeWorkspaceId}/agents/${id}`);
-    },
-    onSuccess: () => {
-      toast({
-        title: "Agent deleted",
-        description: "The agent has been permanently removed.",
-      });
-      navigate("/agents");
-    },
-    onError: (err: any) => {
-      toast({
-        title: "Error deleting agent",
-        description:
-          err.response?.data?.detail || "An unexpected error occurred.",
-        variant: "destructive",
-      });
-    },
-  });
+  const handleDelete = () => {
+    deleteAgent.mutate(undefined, {
+      onSuccess: () => {
+        toast({
+          title: "Agent deleted",
+          description: "The agent has been permanently removed.",
+        });
+        navigate("/agents");
+      },
+      onError: (err: any) => {
+        toast({
+          title: "Error deleting agent",
+          description:
+            err.response?.data?.detail || "An unexpected error occurred.",
+          variant: "destructive",
+        });
+      }
+    });
+  };
 
   const handleUpdate = (field: string, value: any) => {
     setAgentData((prev: any) => ({ ...prev, [field]: value }));
@@ -412,12 +388,12 @@ export default function AgentDetail() {
       {/* Save Button */}
       <div className="flex justify-end pb-6">
         <Button
-          disabled={isActive || updateMutation.isPending}
+          disabled={isActive || updateAgent.isPending}
           size="lg"
           className="px-8"
-          onClick={() => updateMutation.mutate(agentData)}
+          onClick={handleSave}
         >
-          {updateMutation.isPending ? (
+          {updateAgent.isPending ? (
             <>
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               Saving Changes...
@@ -450,7 +426,7 @@ export default function AgentDetail() {
         onOpenChange={setDeleteOpen}
         title="Delete Agent"
         description={`Are you sure you want to delete ${agentData.name}? This will stop all active campaigns using this agent. This action cannot be undone.`}
-        onConfirm={() => deleteMutation.mutate()}
+        onConfirm={handleDelete}
       />
     </div>
   );

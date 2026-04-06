@@ -1,44 +1,18 @@
-import { useState, useEffect } from "react";
+
 import { useNavigate, useParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { ChevronLeft, Download, Flag, Share2 } from "lucide-react";
 import { CallMetadataCard } from "@/components/call-detail/CallMetadataCard";
 import { CallAudioPlayer, CallTranscript } from "@/components/call-detail/CallTranscript";
-import { workspaceRequest } from "@/lib/api";
 import { formatCentsToDollars, formatSecondsToDuration, formatDate } from "@/lib/utils";
+import { useCallDetailQuery } from "@/hooks/api/useCalls";
 
 export default function CallDetail() {
   const navigate = useNavigate();
   const { id } = useParams();
-  const [call, setCall] = useState<any>(null);
-  const [transcript, setTranscript] = useState<any[]>([]);
-  const [recordingUrl, setRecordingUrl] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-
-  useEffect(() => {
-    if (id) {
-      fetchCallDetail();
-    }
-  }, [id]);
-
-  const fetchCallDetail = async () => {
-    setIsLoading(true);
-    try {
-      const [callRes, transcriptRes, recordingRes] = await Promise.all([
-        workspaceRequest.get<any>(`/calls/${id}`),
-        workspaceRequest.get<any[]>(`/calls/${id}/transcript`),
-        workspaceRequest.get<{ url: string }>(`/calls/${id}/recording`),
-      ]);
-
-      setCall(callRes.data);
-      setTranscript(transcriptRes.data);
-      setRecordingUrl(recordingRes.data.url);
-    } catch (error) {
-      console.error("Failed to fetch call detail", error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  
+  const { data, isLoading } = useCallDetailQuery(id);
+  const { call, transcript = [], recordingUrl } = data || {};
 
   if (isLoading) {
     return (

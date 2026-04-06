@@ -1,4 +1,3 @@
-import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { StatCard } from "@/components/shared/StatCard";
 import { StatusBadge } from "@/components/shared/StatusBadge";
@@ -14,45 +13,12 @@ import {
   ChevronRight,
   Loader2,
 } from "lucide-react";
-import { workspaceRequest } from "@/lib/api";
 import { WelcomeBanner } from "@/components/dashboard/WelcomeBanner";
 import { OnboardingStepper } from "@/components/dashboard/OnboardingStepper";
 import { ActiveCampaignsGrid } from "@/components/dashboard/ActiveCampaignsGrid";
 import { QuickStats } from "@/components/dashboard/QuickStats";
 import { DashboardEmptyState } from "@/components/dashboard/DashboardEmptyState";
-
-interface AnalyticsOverview {
-  total_calls: number;
-  total_calls_delta_pct: number | null;
-  success_rate: number;
-  success_rate_delta_pct: number | null;
-  total_cost_cents: number;
-  total_cost_delta_pct: number | null;
-  contacts_called: number;
-  avg_duration_seconds: number | null;
-}
-
-interface Campaign {
-  id: string;
-  name: string;
-  status: string;
-  total_contacts: number;
-  processed_contacts: number;
-  success_count: number;
-  cost_cents: number;
-  agent_name: string | null;
-}
-
-interface CallListItem {
-  id: string;
-  contact_name: string | null;
-  contact_phone: string | null;
-  agent_name: string | null;
-  campaign_name: string | null;
-  status: string;
-  duration_seconds: number;
-  created_at: string;
-}
+import { useDashboardQueries, AnalyticsOverview, Campaign, CallListItem } from "@/hooks/api/useDashboard";
 
 const conversationColumns: Column<CallListItem>[] = [
   {
@@ -101,30 +67,7 @@ const conversationColumns: Column<CallListItem>[] = [
 
 export default function Dashboard() {
   const navigate = useNavigate();
-  const [analytics, setAnalytics] = useState<AnalyticsOverview | null>(null);
-  const [activeCampaigns, setActiveCampaigns] = useState<Campaign[]>([]);
-  const [recentCalls, setRecentCalls] = useState<CallListItem[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const [analyticsRes, campaignsRes, callsRes] = await Promise.all([
-          workspaceRequest.get<{ overview: AnalyticsOverview }>("/analytics"),
-          workspaceRequest.get<Campaign[]>("/campaigns?status=live&status=paused"),
-          workspaceRequest.get<{ items: CallListItem[] }>("/calls", { params: { page_size: 6 } })
-        ]);
-        setAnalytics(analyticsRes.data.overview);
-        setActiveCampaigns(campaignsRes.data);
-        setRecentCalls(callsRes.data.items);
-      } catch (err) {
-        console.error("Failed to fetch dashboard data:", err);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    fetchData();
-  }, []);
+  const { data, isLoading, isError } = useDashboardQueries();
 
   if (isLoading) {
     return (
@@ -133,6 +76,12 @@ export default function Dashboard() {
       </div>
     );
   }
+
+  if (isError || !data) {
+    return <DashboardEmptyState />;
+  }
+
+  const { analytics, activeCampaigns, recentCalls } = data;
 
   const isEmpty = (!analytics || analytics.total_calls === 0) && activeCampaigns.length === 0;
 

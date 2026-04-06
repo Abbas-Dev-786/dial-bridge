@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useMemo } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -16,8 +16,7 @@ import {
   User as UserIcon,
   Calendar,
 } from "lucide-react";
-import { workspaceRequest } from "@/lib/api";
-import { toast } from "sonner";
+import { useAuditLogsQuery, useMembersQuery } from "@/hooks/api/useSettings";
 import { format, subDays } from "date-fns";
 import { DatePickerWithRange } from "@/components/shared/DateRangePicker";
 import { DateRange } from "react-day-picker";
@@ -43,11 +42,7 @@ interface Member {
 }
 
 export default function AuditLogs() {
-  const [logs, setLogs] = useState<AuditLog[]>([]);
-  const [total, setTotal] = useState(0);
-  const [hasNext, setHasNext] = useState(false);
   const [page, setPage] = useState(1);
-  const [isLoading, setIsLoading] = useState(true);
 
   const [resourceFilter, setResourceFilter] = useState("all");
   const [actorFilter, setActorFilter] = useState("all");
@@ -56,22 +51,7 @@ export default function AuditLogs() {
     to: new Date(),
   });
 
-  const [members, setMembers] = useState<Member[]>([]);
-  const [expandedId, setExpandedId] = useState<string | null>(null);
-
-  // Fetch members to resolve actor names
-  useEffect(() => {
-    workspaceRequest
-      .get<Member[]>("/members")
-      .then((res) => {
-        setMembers(res.data);
-      })
-      .catch((err) => {
-        console.error(err);
-        toast.error("Failed to load team members");
-      });
-  }, []);
-
+  const { data: members = [] } = useMembersQuery();
   const fetchParams = useMemo(
     () => ({
       resource_type: resourceFilter === "all" ? undefined : resourceFilter,
@@ -86,29 +66,9 @@ export default function AuditLogs() {
     [resourceFilter, actorFilter, dateRange, page],
   );
 
-  useEffect(() => {
-    const loadLogs = async () => {
-      setIsLoading(true);
-      try {
-        const res = await workspaceRequest.get<{
-          items: AuditLog[];
-          total: number;
-          has_next: boolean;
-        }>("/audit-logs", {
-          params: fetchParams,
-        });
-        setLogs(res.data.items);
-        setTotal(res.data.total);
-        setHasNext(res.data.has_next);
-      } catch (err) {
-        console.error(err);
-        toast.error("Failed to load audit logs");
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    loadLogs();
-  }, [fetchParams]);
+  const { data, isLoading } = useAuditLogsQuery(fetchParams);
+  const logs = data?.items || [];
+  const total = data?.total || 0;
 
   const getActorName = (actorId: string | null, actorType: string) => {
     if (actorType === "system") return "System";

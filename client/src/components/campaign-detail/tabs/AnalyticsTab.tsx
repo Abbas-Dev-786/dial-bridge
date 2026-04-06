@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState, useEffect } from "react";
 import { useParams } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -28,8 +28,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { useCampaignStore } from "@/store/useCampaignStore";
 import { useToast } from "@/hooks/use-toast";
+import { useAnalyticsQuery } from "@/hooks/api/useAnalytics";
+import { useCampaignDetailQuery, useCampaignMutations } from "@/hooks/api/useCampaigns";
 import { CalendarIcon, Loader2, AlertTriangle, Trash2 } from "lucide-react";
 
 const tooltipStyle = {
@@ -41,17 +42,16 @@ const axisTick = { fill: "hsl(220 10% 46%)" };
 
 export function AnalyticsTab() {
   const { id } = useParams();
-  const { fetchAnalytics, analytics, isLoading } = useCampaignStore();
   const [dateRange, setDateRange] = useState({ from: "", to: "" });
 
-  useEffect(() => {
-    if (id) {
-      fetchAnalytics(id);
-    }
-  }, [id, fetchAnalytics]);
+  const queryParams: any = { campaign_id: id };
+  if (dateRange.from) queryParams.date_from = dateRange.from;
+  if (dateRange.to) queryParams.date_to = dateRange.to;
+
+  const { data: analytics, isLoading, refetch } = useAnalyticsQuery(queryParams);
 
   const handleRefresh = () => {
-    if (id) fetchAnalytics(id, dateRange.from, dateRange.to);
+    refetch();
   };
 
   return (
@@ -226,14 +226,15 @@ export function AnalyticsTab() {
 
 export function SettingsTab() {
   const { id } = useParams();
-  const { activeCampaign, updateCampaign, campaignStatus } = useCampaignStore();
+  const { data: activeCampaign } = useCampaignDetailQuery(id);
+  const { updateCampaign, deleteCampaign } = useCampaignMutations(id);
+  const campaignStatus = activeCampaign?.status || "draft";
   const { toast } = useToast();
   
   const [formData, setFormData] = useState({
     name: activeCampaign?.name || "",
     goal_description: activeCampaign?.goal_description || "",
   });
-  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     if (activeCampaign) {
@@ -244,17 +245,11 @@ export function SettingsTab() {
     }
   }, [activeCampaign]);
 
-  const handleSave = async () => {
-    if (!id) return;
-    setIsSaving(true);
-    try {
-      await updateCampaign(id, formData);
-      toast({ title: "Settings saved", description: "Campaign configuration has been updated." });
-    } catch (error) {
-      toast({ title: "Save failed", variant: "destructive" });
-    } finally {
-      setIsSaving(false);
-    }
+  const handleSave = () => {
+    updateCampaign.mutate(formData, {
+      onSuccess: () => toast({ title: "Settings saved", description: "Campaign configuration has been updated." }),
+      onError: () => toast({ title: "Save failed", variant: "destructive" }),
+    });
   };
 
   return (
@@ -295,8 +290,8 @@ export function SettingsTab() {
               Note: Changing the goal requires regenerating the agent in the Agents tab.
             </p>
           </div>
-          <Button onClick={handleSave} disabled={isSaving || campaignStatus === "live"}>
-            {isSaving ? "Saving..." : "Save Changes"}
+          <Button onClick={handleSave} disabled={updateCampaign.isPending || campaignStatus === "live"}>
+            {updateCampaign.isPending ? "Saving..." : "Save Changes"}
           </Button>
           {campaignStatus === "live" && (
             <p className="text-xs text-warning flex items-center gap-1 mt-2">
@@ -317,7 +312,7 @@ export function SettingsTab() {
           <p className="text-xs text-muted-foreground mb-4">
             Archiving this campaign will stop all active calls and move it to the archive. This action cannot be undone easily.
           </p>
-          <Button variant="destructive" size="sm">
+          <Button variant="destructive" size="sm" onClick={() => deleteCampaign.mutate()}>
             Archive Campaign
           </Button>
         </CardContent>

@@ -4,8 +4,9 @@ import { Users, CheckCircle, XCircle, DollarSign, ArrowRight, TrendingUp, PhoneC
 import { DataTable, Column } from "@/components/shared/DataTable";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { Badge } from "@/components/ui/badge";
-import { useNavigate } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import { useCampaignStore } from "@/store/useCampaignStore";
+import { useCampaignDetailQuery } from "@/hooks/api/useCampaigns";
 import { CAMPAIGN_CALLS, KNOWLEDGE_DOCS } from "@/lib/mockData";
 import { forwardRef } from "react";
 import { cn } from "@/lib/utils";
@@ -13,7 +14,9 @@ import { Button } from "@/components/ui/button";
 
 export function DashboardTab() {
   const navigate = useNavigate();
-  const { setActiveTab, contactsData, activeCampaign } = useCampaignStore();
+  const { id } = useParams();
+  const { setActiveTab } = useCampaignStore();
+  const { data: activeCampaign } = useCampaignDetailQuery(id);
 
   const stats = {
     contacted: activeCampaign?.contacts_called || 0,

@@ -8,27 +8,29 @@ import { StatusBadge } from "@/components/shared/StatusBadge";
 import { Separator } from "@/components/ui/separator";
 import { useNavigate } from "react-router-dom";
 import { useCampaignStore } from "@/store/useCampaignStore";
+import { useCampaignDetailQuery, useCampaignMutations } from "@/hooks/api/useCampaigns";
 
 export function AgentsTab() {
   const navigate = useNavigate();
   const { id } = useParams();
-  const { campaignStatus, activeCampaign, regenerateAgent } = useCampaignStore();
-  const [isRegenerating, setIsRegenerating] = useState(false);
+  
+  const { data: activeCampaign } = useCampaignDetailQuery(id);
+  const { regenerateAgent } = useCampaignMutations(id);
+  const campaignStatus = activeCampaign?.status || "draft";
+
   const { toast } = useToast();
   
   const agent = activeCampaign?.agent;
 
-  const handleRegenerate = async () => {
-    if (!id) return;
-    setIsRegenerating(true);
-    try {
-      await regenerateAgent(id);
-      toast({ title: "Agent regenerated", description: "The agent has been updated based on the campaign goal." });
-    } catch (error) {
-      toast({ title: "Regeneration failed", variant: "destructive" });
-    } finally {
-      setIsRegenerating(false);
-    }
+  const handleRegenerate = () => {
+    regenerateAgent.mutate(undefined, {
+      onSuccess: () => {
+        toast({ title: "Agent regenerated", description: "The agent has been updated based on the campaign goal." });
+      },
+      onError: () => {
+        toast({ title: "Regeneration failed", variant: "destructive" });
+      }
+    });
   };
 
   if (!agent) {
@@ -88,9 +90,9 @@ export function AgentsTab() {
               variant="outline"
               size="sm"
               onClick={handleRegenerate}
-              disabled={isRegenerating || campaignStatus === "live"}
+              disabled={regenerateAgent.isPending || campaignStatus === "live"}
             >
-              {isRegenerating ? "Regenerating..." : "Regenerate Agent"}
+              {regenerateAgent.isPending ? "Regenerating..." : "Regenerate Agent"}
             </Button>
           </div>
           {campaignStatus === "live" && (

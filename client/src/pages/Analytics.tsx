@@ -9,9 +9,10 @@ import {
   OutcomeDistributionChart, 
   SentimentDistributionChart 
 } from "@/components/analytics/AnalyticsCharts";
-import { workspaceRequest } from "@/lib/api";
 import { formatCentsToDollars, formatSecondsToDuration } from "@/lib/utils";
 import { DatePickerWithRange } from "@/components/shared/DateRangePicker";
+import { useCampaignsQuery } from "@/hooks/api/useCampaigns";
+import { useAnalyticsQuery } from "@/hooks/api/useAnalytics";
 import { subDays, startOfMonth, format, endOfDay } from "date-fns";
 import { DateRange } from "react-day-picker";
 
@@ -22,16 +23,9 @@ export default function Analytics() {
     to: new Date(),
   }));
   const [campaignFilter, setCampaignFilter] = useState("all");
-  const [campaigns, setCampaigns] = useState<{ id: string; name: string }[]>([]);
-  const [data, setData] = useState<any>(null);
-  const [isLoading, setIsLoading] = useState(true);
-
   // Fetch campaigns for dropdown
-  useEffect(() => {
-    workspaceRequest.get<{ items: { id: string; name: string }[] }>("/campaigns").then(res => {
-      setCampaigns(res.data.items || []);
-    }).catch(console.error);
-  }, []);
+  const { data: campaignsData } = useCampaignsQuery();
+  const campaigns = campaignsData?.items || [];
 
   const fetchParams = useMemo(() => {
     let date_from: string;
@@ -57,13 +51,7 @@ export default function Analytics() {
     };
   }, [dateRangeType, customRange, campaignFilter]);
 
-  useEffect(() => {
-    setIsLoading(true);
-    workspaceRequest.get("/analytics", { params: fetchParams })
-      .then(res => setData(res.data))
-      .catch(console.error)
-      .finally(() => setIsLoading(false));
-  }, [fetchParams]);
+  const { data, isLoading } = useAnalyticsQuery(fetchParams);
 
   if (isLoading && !data) {
     return (

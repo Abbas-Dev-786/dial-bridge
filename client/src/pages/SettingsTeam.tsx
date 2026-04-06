@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -6,8 +6,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Plus, Trash2, Loader2, ShieldCheck, Shield, User } from "lucide-react";
 import { InviteTeamMemberDialog } from "@/components/dialogs/InviteTeamMemberDialog";
 import { DeleteConfirmDialog } from "@/components/dialogs/DeleteConfirmDialog";
-import { workspaceRequest } from "@/lib/api";
 import { toast } from "sonner";
+import { useMembersQuery, useMemberMutations } from "@/hooks/api/useSettings";
 
 interface Member {
   id: string;
@@ -24,48 +24,29 @@ interface Member {
 export default function SettingsTeam() {
   const [inviteOpen, setInviteOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Member | null>(null);
-  const [members, setMembers] = useState<Member[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
 
-  const loadMembers = async () => {
-    try {
-      const res = await workspaceRequest.get<Member[]>("/members");
-      setMembers(res.data);
-    } catch (err) {
-      console.error(err);
-      toast.error("Failed to load team members");
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  const { data: members = [], isLoading, refetch } = useMembersQuery();
+  const { removeMember, updateRole } = useMemberMutations();
 
-  useEffect(() => {
-    loadMembers();
-  }, []);
-
-  const handleRemove = async () => {
+  const handleRemove = () => {
     if (!deleteTarget) return;
-    try {
-      await workspaceRequest.delete(`/members/${deleteTarget.user.id}`);
-      toast.success("Member removed");
-      setMembers(prev => prev.filter(m => m.user.id !== deleteTarget.user.id));
-    } catch (err) {
-      console.error(err);
-      toast.error("Failed to remove member");
-    } finally {
-      setDeleteTarget(null);
-    }
+    removeMember.mutate(deleteTarget.user.id, {
+      onSuccess: () => {
+        toast.success("Member removed");
+        setDeleteTarget(null);
+      },
+      onError: () => {
+        toast.error("Failed to remove member");
+        setDeleteTarget(null);
+      }
+    });
   };
 
-  const handleUpdateRole = async (userId: string, newRole: string) => {
-    try {
-      await workspaceRequest.patch(`/members/${userId}`, { role: newRole });
-      toast.success("Role updated");
-      setMembers(prev => prev.map(m => m.user.id === userId ? { ...m, role: newRole } : m));
-    } catch (err) {
-      console.error(err);
-      toast.error("Failed to update role");
-    }
+  const handleUpdateRole = (userId: string, newRole: string) => {
+    updateRole.mutate({ userId, role: newRole }, {
+      onSuccess: () => toast.success("Role updated"),
+      onError: () => toast.error("Failed to update role")
+    });
   };
 
   if (isLoading) {
@@ -142,7 +123,7 @@ export default function SettingsTeam() {
         ))}
       </div>
 
-      <InviteTeamMemberDialog open={inviteOpen} onOpenChange={setInviteOpen} onSuccess={loadMembers} />
+      <InviteTeamMemberDialog open={inviteOpen} onOpenChange={setInviteOpen} onSuccess={refetch} />
       
       <DeleteConfirmDialog
         open={!!deleteTarget}

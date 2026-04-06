@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
+
 import { useParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Plus, FileText, Trash2, RefreshCw, AlertCircle, Link as LinkIcon, Loader2, Globe, Database, Mail, Zap } from "lucide-react";
 import { useCampaignStore } from "@/store/useCampaignStore";
+import { useCampaignDetailQuery, useKnowledgeQuery, useCampaignIntegrationsQuery, useCampaignMutations } from "@/hooks/api/useCampaigns";
 import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
@@ -13,45 +14,24 @@ import { Input } from "@/components/ui/input";
 export function KnowledgeBaseTab() {
   const { id } = useParams();
   const { toast } = useToast();
-  const { 
-    knowledgeDocs, 
-    fetchKnowledge, 
-    syncKnowledge, 
-    deleteKnowledge, 
-    activeCampaign,
-    setDialogState,
-    isLoading
-  } = useCampaignStore();
+  const { setDialogState } = useCampaignStore();
   
-  const [isSyncing, setIsSyncing] = useState(false);
+  const { data: activeCampaign } = useCampaignDetailQuery(id);
+  const { data: knowledgeDocs = [], isLoading } = useKnowledgeQuery(id);
+  const { syncKnowledge, deleteKnowledge } = useCampaignMutations(id);
 
-  useEffect(() => {
-    if (id) {
-      fetchKnowledge(id);
-    }
-  }, [id, fetchKnowledge]);
-
-  const handleSync = async () => {
-    if (!id) return;
-    setIsSyncing(true);
-    try {
-      await syncKnowledge(id);
-      toast({ title: "Sync triggered", description: "Knowledge base synchronization has started." });
-    } catch (error) {
-      toast({ title: "Sync failed", variant: "destructive" });
-    } finally {
-      setIsSyncing(false);
-    }
+  const handleSync = () => {
+    syncKnowledge.mutate(undefined, {
+      onSuccess: () => toast({ title: "Sync triggered", description: "Knowledge base synchronization has started." }),
+      onError: () => toast({ title: "Sync failed", variant: "destructive" })
+    });
   };
 
-  const handleDelete = async (docId: string) => {
-    if (!id) return;
-    try {
-      await deleteKnowledge(id, docId);
-      toast({ title: "Document deleted" });
-    } catch (error) {
-      toast({ title: "Delete failed", variant: "destructive" });
-    }
+  const handleDelete = (docId: string) => {
+    deleteKnowledge.mutate(docId, {
+      onSuccess: () => toast({ title: "Document deleted" }),
+      onError: () => toast({ title: "Delete failed", variant: "destructive" })
+    });
   };
 
   const getStatusColor = (status: string) => {
@@ -71,8 +51,8 @@ export function KnowledgeBaseTab() {
           <p className="text-sm text-muted-foreground">{knowledgeDocs.length} documents for agent RAG reference</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={handleSync} disabled={isSyncing}>
-            {isSyncing ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="mr-1.5 h-3.5 w-3.5" />}
+          <Button variant="outline" size="sm" onClick={handleSync} disabled={syncKnowledge.isPending}>
+            {syncKnowledge.isPending ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="mr-1.5 h-3.5 w-3.5" />}
             Sync All
           </Button>
           <Button size="sm" onClick={() => setDialogState("uploadDoc", true)}><Plus className="mr-1.5 h-3.5 w-3.5" /> Add Knowledge</Button>
@@ -146,23 +126,16 @@ const IntegrationIcons: Record<string, any> = {
 
 export function IntegrationsTab() {
   const { id } = useParams();
-  const { integrations, fetchIntegrations, toggleIntegration, setDialogState, setSelectedIntegration } = useCampaignStore();
+  const { setDialogState, setSelectedIntegration } = useCampaignStore();
+  const { data: integrations = [] } = useCampaignIntegrationsQuery(id);
+  const { toggleIntegration } = useCampaignMutations(id);
   const { toast } = useToast();
 
-  useEffect(() => {
-    if (id) {
-      fetchIntegrations(id);
-    }
-  }, [id, fetchIntegrations]);
-
-  const onToggle = async (intId: string, active: boolean) => {
-    if (!id) return;
-    try {
-      await toggleIntegration(id, intId, active);
-      toast({ title: active ? "Integration enabled" : "Integration disabled" });
-    } catch (error) {
-      toast({ title: "Toggle failed", variant: "destructive" });
-    }
+  const onToggle = (intId: string, active: boolean) => {
+    toggleIntegration.mutate({ integrationId: intId, is_active: active }, {
+      onSuccess: () => toast({ title: active ? "Integration enabled" : "Integration disabled" }),
+      onError: () => toast({ title: "Toggle failed", variant: "destructive" })
+    });
   };
 
   return (

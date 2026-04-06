@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { DataTable, Column } from "@/components/shared/DataTable";
 import { StatusBadge } from "@/components/shared/StatusBadge";
@@ -7,7 +7,8 @@ import { Button } from "@/components/ui/button";
 import { PhoneCall, Download, ChevronLeft, ChevronRight, Filter } from "lucide-react";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { ExportDataDialog } from "@/components/dialogs/ExportDataDialog";
-import { workspaceRequest } from "@/lib/api";
+import { useCallsQuery, CallListItem } from "@/hooks/api/useCalls";
+import { useCampaignsQuery } from "@/hooks/api/useCampaigns";
 import { formatCentsToDollars, formatSecondsToDuration, formatDate } from "@/lib/utils";
 import {
   Select,
@@ -17,18 +18,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-interface CallListItem {
-  id: string;
-  contact_name: string | null;
-  contact_phone: string | null;
-  agent_name: string | null;
-  campaign_name: string | null;
-  direction: string;
-  status: any;
-  duration_seconds: number | null;
-  total_cost_cents: number;
-  created_at: string;
-}
+
 
 const columns: Column<CallListItem>[] = [
   { 
@@ -78,51 +68,18 @@ export default function CallLogs() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [exportOpen, setExportOpen] = useState(false);
-  const [calls, setCalls] = useState<CallListItem[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [total, setTotal] = useState(0);
-  const [campaigns, setCampaigns] = useState<any[]>([]);
 
   const page = parseInt(searchParams.get("page") || "1");
   const campaignId = searchParams.get("campaign_id") || "all";
   const statusFilter = searchParams.get("status") || "all";
 
-  useEffect(() => {
-    fetchCampaigns();
-  }, []);
+  const { data: campaignsData } = useCampaignsQuery();
+  const campaigns = campaignsData || [];
 
-  useEffect(() => {
-    fetchCalls();
-  }, [page, campaignId, statusFilter]);
-
-  const fetchCampaigns = async () => {
-    try {
-      const res = await workspaceRequest.get<any[]>("/campaigns");
-      setCampaigns(res.data);
-    } catch (error) {
-      console.error("Failed to fetch campaigns", error);
-    }
-  };
-
-  const fetchCalls = async () => {
-    setIsLoading(true);
-    try {
-      const params: any = {
-        page,
-        page_size: 20,
-      };
-      if (campaignId !== "all") params.campaign_id = campaignId;
-      if (statusFilter !== "all") params.status = [statusFilter];
-
-      const res = await workspaceRequest.get<{ items: CallListItem[]; total: number }>("/calls", { params });
-      setCalls(res.data.items);
-      setTotal(res.data.total);
-    } catch (error) {
-      console.error("Failed to fetch calls", error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  const { data: callsData, isLoading, isError } = useCallsQuery(page, campaignId, statusFilter);
+  
+  const calls = callsData?.items || [];
+  const total = callsData?.total || 0;
 
   const handlePageChange = (newPage: number) => {
     searchParams.set("page", newPage.toString());

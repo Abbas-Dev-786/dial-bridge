@@ -6,8 +6,8 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { RefreshCw, Plus, Trash2, Copy, Globe, Settings, Loader2 } from "lucide-react";
-import { workspaceRequest } from "@/lib/api";
 import { toast } from "sonner";
+import { useWebhooksQuery, useWebhookLogsQuery, useWebhookMutations } from "@/hooks/api/useSettings";
 import { CreateWebhookEndpointDialog } from "@/components/dialogs/CreateWebhookEndpointDialog";
 import { formatDistanceToNow } from "date-fns";
 
@@ -33,51 +33,26 @@ interface WebhookDelivery {
 }
 
 export default function WebhookLogs() {
-  const [endpoints, setEndpoints] = useState<WebhookEndpoint[]>([]);
-  const [deliveries, setDeliveries] = useState<WebhookDelivery[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
   const [createOpen, setCreateOpen] = useState(false);
 
-  const loadData = async () => {
-    try {
-      const [epRes, delRes] = await Promise.all([
-        workspaceRequest.get<WebhookEndpoint[]>("/webhooks/endpoints"),
-        workspaceRequest.get<WebhookDelivery[]>("/webhooks/deliveries")
-      ]);
-      setEndpoints(epRes.data);
-      setDeliveries(delRes.data);
-    } catch (err) {
-      console.error(err);
-      toast.error("Failed to load webhook data");
-    } finally {
-      setIsLoading(false);
-    }
+  const { data: endpoints = [], isLoading: isLoadingEndpoints } = useWebhooksQuery();
+  const { data: deliveries = [], isLoading: isLoadingDeliveries } = useWebhookLogsQuery();
+  const { deleteWebhook, retryDelivery } = useWebhookMutations();
+  
+  const isLoading = isLoadingEndpoints || isLoadingDeliveries;
+
+  const handleRetry = (deliveryId: string) => {
+    retryDelivery.mutate(deliveryId, {
+      onSuccess: () => toast.success("Delivery retry initiated"),
+      onError: () => toast.error("Failed to retry delivery")
+    });
   };
 
-  useEffect(() => {
-    loadData();
-  }, []);
-
-  const handleRetry = async (deliveryId: string) => {
-    try {
-      await workspaceRequest.post(`/webhooks/deliveries/${deliveryId}/retry`);
-      toast.success("Delivery retry initiated");
-      loadData();
-    } catch (err) {
-      console.error(err);
-      toast.error("Failed to retry delivery");
-    }
-  };
-
-  const handleDelete = async (endpointId: string) => {
-    try {
-      await workspaceRequest.delete(`/webhooks/endpoints/${endpointId}`);
-      toast.success("Endpoint deleted");
-      setEndpoints(prev => prev.filter(ep => ep.id !== endpointId));
-    } catch (err) {
-      console.error(err);
-      toast.error("Failed to delete endpoint");
-    }
+  const handleDelete = (endpointId: string) => {
+    deleteWebhook.mutate(endpointId, {
+      onSuccess: () => toast.success("Endpoint deleted"),
+      onError: () => toast.error("Failed to delete endpoint")
+    });
   };
 
   const deliveryColumns: Column<WebhookDelivery>[] = [
@@ -226,7 +201,6 @@ export default function WebhookLogs() {
       <CreateWebhookEndpointDialog
         open={createOpen}
         onOpenChange={setCreateOpen}
-        onCreated={loadData}
       />
     </div>
   );

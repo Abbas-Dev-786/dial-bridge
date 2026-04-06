@@ -76,6 +76,50 @@ export function useKnowledgeQuery(campaignId?: string) {
   });
 }
 
+export function useKnowledgeSyncStatusQuery(campaignId?: string) {
+  const { activeWorkspaceId } = useWorkspaceStore();
+  
+  return useQuery({
+    queryKey: ["campaign_knowledge_sync", activeWorkspaceId, campaignId],
+    queryFn: async () => {
+      if (!activeWorkspaceId || !campaignId) throw new Error("Missing requirements");
+      const response = await workspaceRequest.get<any>(`/campaigns/${campaignId}/knowledge/sync-status`);
+      return response.data;
+    },
+    enabled: !!activeWorkspaceId && !!campaignId,
+    refetchInterval: (query) => (query.state.data?.status === 'syncing' ? 3000 : false),
+  });
+}
+
+export function useKnowledgeSnapshotsQuery(campaignId?: string) {
+  const { activeWorkspaceId } = useWorkspaceStore();
+  
+  return useQuery({
+    queryKey: ["campaign_knowledge_snapshots", activeWorkspaceId, campaignId],
+    queryFn: async () => {
+      if (!activeWorkspaceId || !campaignId) throw new Error("Missing requirements");
+      const response = await workspaceRequest.get<any[]>(`/campaigns/${campaignId}/knowledge/snapshots`);
+      return response.data;
+    },
+    enabled: !!activeWorkspaceId && !!campaignId,
+  });
+}
+
+// Analytics
+export function useCampaignAnalyticsQuery(campaignId?: string, params: any = {}) {
+  const { activeWorkspaceId } = useWorkspaceStore();
+  
+  return useQuery({
+    queryKey: ["campaign_analytics", activeWorkspaceId, campaignId, params],
+    queryFn: async () => {
+      if (!activeWorkspaceId || !campaignId) throw new Error("Missing requirements");
+      const response = await workspaceRequest.get<any>(`/campaigns/${campaignId}/analytics`, { params });
+      return response.data;
+    },
+    enabled: !!activeWorkspaceId && !!campaignId,
+  });
+}
+
 // Integrations
 export function useCampaignIntegrationsQuery(campaignId?: string) {
   const { activeWorkspaceId } = useWorkspaceStore();
@@ -172,10 +216,25 @@ export function useCampaignMutations(campaignId?: string) {
     mutationFn: async (file: File) => {
       const formData = new FormData();
       formData.append("file", file);
-      return workspaceRequest.post(`/campaigns/${campaignId}/contacts/import`, formData, {
+      return workspaceRequest.post(`/campaigns/${campaignId}/contacts/import-csv`, formData, {
         headers: { "Content-Type": "multipart/form-data" },
       });
     },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["campaign_contacts", activeWorkspaceId, campaignId] }),
+  });
+
+  const exportContacts = useMutation({
+    mutationFn: async () => {
+      const response = await workspaceRequest.get(`/campaigns/${campaignId}/contacts/export`, {
+        responseType: 'blob'
+      });
+      return response.data;
+    },
+  });
+
+  const markContactDNC = useMutation({
+    mutationFn: async (contactId: string) => 
+      workspaceRequest.post(`/campaigns/${campaignId}/contacts/${contactId}/mark-dnc`, {}),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["campaign_contacts", activeWorkspaceId, campaignId] }),
   });
 
@@ -206,6 +265,7 @@ export function useCampaignMutations(campaignId?: string) {
     onSuccess: () => {
         invalidateCampaign();
         queryClient.invalidateQueries({ queryKey: ["campaign_knowledge", activeWorkspaceId, campaignId] });
+        queryClient.invalidateQueries({ queryKey: ["campaign_knowledge_sync", activeWorkspaceId, campaignId] });
     },
   });
 
@@ -213,6 +273,12 @@ export function useCampaignMutations(campaignId?: string) {
   const toggleIntegration = useMutation({
     mutationFn: async ({ integrationId, is_active }: { integrationId: string; is_active: boolean }) => 
       workspaceRequest.post(`/campaigns/${campaignId}/integrations/${integrationId}`, { is_active }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["campaign_integrations", activeWorkspaceId, campaignId] }),
+  });
+
+  const deleteCampaignIntegration = useMutation({
+    mutationFn: async (integrationId: string) => 
+      workspaceRequest.delete(`/campaigns/${campaignId}/integrations/${integrationId}`),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["campaign_integrations", activeWorkspaceId, campaignId] }),
   });
 
@@ -227,10 +293,13 @@ export function useCampaignMutations(campaignId?: string) {
     updateContact,
     deleteContact,
     importContacts,
+    exportContacts,
+    markContactDNC,
     uploadKnowledgeFile,
     addKnowledgeUrl,
     deleteKnowledge,
     syncKnowledge,
     toggleIntegration,
+    deleteCampaignIntegration,
   };
 }

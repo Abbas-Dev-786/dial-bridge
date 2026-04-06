@@ -1,15 +1,13 @@
-
 import { useParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Plus, FileText, Trash2, RefreshCw, AlertCircle, Link as LinkIcon, Loader2, Globe, Database, Mail, Zap } from "lucide-react";
+import { Plus, FileText, Trash2, RefreshCw, AlertCircle, Link as LinkIcon, Loader2, Globe, Database, Mail, Zap, CheckCircle2, Clock } from "lucide-react";
 import { useCampaignStore } from "@/store/useCampaignStore";
-import { useCampaignDetailQuery, useKnowledgeQuery, useCampaignIntegrationsQuery, useCampaignMutations } from "@/hooks/api/useCampaigns";
+import { useCampaignDetailQuery, useKnowledgeQuery, useKnowledgeSyncStatusQuery, useCampaignIntegrationsQuery, useCampaignMutations } from "@/hooks/api/useCampaigns";
 import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { Card, CardContent } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
-import { Input } from "@/components/ui/input";
 
 export function KnowledgeBaseTab() {
   const { id } = useParams();
@@ -18,6 +16,7 @@ export function KnowledgeBaseTab() {
   
   const { data: activeCampaign } = useCampaignDetailQuery(id);
   const { data: knowledgeDocs = [], isLoading } = useKnowledgeQuery(id);
+  const { data: syncStatus } = useKnowledgeSyncStatusQuery(id);
   const { syncKnowledge, deleteKnowledge } = useCampaignMutations(id);
 
   const handleSync = () => {
@@ -43,6 +42,8 @@ export function KnowledgeBaseTab() {
     }
   };
 
+  const isSyncing = syncStatus?.status === 'syncing';
+
   return (
     <div className="space-y-4">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -51,23 +52,29 @@ export function KnowledgeBaseTab() {
           <p className="text-sm text-muted-foreground">{knowledgeDocs.length} documents for agent RAG reference</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={handleSync} disabled={syncKnowledge.isPending}>
-            {syncKnowledge.isPending ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="mr-1.5 h-3.5 w-3.5" />}
-            Sync All
+          <Button variant="outline" size="sm" onClick={handleSync} disabled={syncKnowledge.isPending || isSyncing}>
+            {syncKnowledge.isPending || isSyncing ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="mr-1.5 h-3.5 w-3.5" />}
+            {isSyncing ? "Syncing..." : "Sync All"}
           </Button>
           <Button size="sm" onClick={() => setDialogState("uploadDoc", true)}><Plus className="mr-1.5 h-3.5 w-3.5" /> Add Knowledge</Button>
         </div>
       </div>
 
-      {activeCampaign?.kb_sync_status && activeCampaign.kb_sync_status !== "ready" && (
+      {(isSyncing || syncStatus?.status === 'failed') && (
         <div className={cn(
           "flex items-center gap-3 rounded-lg border px-4 py-3",
-          activeCampaign.kb_sync_status === "syncing" ? "border-primary/40 bg-primary/5 text-primary" : "border-warning/40 bg-warning/5 text-warning"
+          isSyncing ? "border-primary/40 bg-primary/5 text-primary" : "border-destructive/40 bg-destructive/5 text-destructive"
         )}>
-          {activeCampaign.kb_sync_status === "syncing" ? <Loader2 className="h-4 w-4 animate-spin" /> : <AlertCircle className="h-4 w-4" />}
-          <p className="text-sm font-medium">
-            Knowledge base is currently {activeCampaign.kb_sync_status}...
-          </p>
+          {isSyncing ? <Loader2 className="h-4 w-4 animate-spin" /> : <AlertCircle className="h-4 w-4" />}
+          <div className="flex-1">
+            <p className="text-sm font-medium">
+              Knowledge base is {isSyncing ? "syncing" : "failed to sync"}
+            </p>
+            {syncStatus?.last_sync_at && (
+              <p className="text-[10px] opacity-80">Last attempt: {new Date(syncStatus.last_sync_at).toLocaleString()}</p>
+            )}
+          </div>
+          {syncStatus?.error && <p className="text-xs font-mono">{syncStatus.error}</p>}
         </div>
       )}
 
@@ -128,13 +135,20 @@ export function IntegrationsTab() {
   const { id } = useParams();
   const { setDialogState, setSelectedIntegration } = useCampaignStore();
   const { data: integrations = [] } = useCampaignIntegrationsQuery(id);
-  const { toggleIntegration } = useCampaignMutations(id);
+  const { toggleIntegration, deleteCampaignIntegration } = useCampaignMutations(id);
   const { toast } = useToast();
 
   const onToggle = (intId: string, active: boolean) => {
     toggleIntegration.mutate({ integrationId: intId, is_active: active }, {
       onSuccess: () => toast({ title: active ? "Integration enabled" : "Integration disabled" }),
       onError: () => toast({ title: "Toggle failed", variant: "destructive" })
+    });
+  };
+
+  const onDelete = (intId: string) => {
+    deleteCampaignIntegration.mutate(intId, {
+      onSuccess: () => toast({ title: "Integration removed from campaign" }),
+      onError: () => toast({ title: "Removal failed", variant: "destructive" })
     });
   };
 
@@ -159,10 +173,15 @@ export function IntegrationsTab() {
                       <p className="text-xs text-muted-foreground">CRM Sync</p>
                     </div>
                   </div>
-                  <Switch
-                    checked={i.is_active}
-                    onCheckedChange={(val) => onToggle(i.id, val)}
-                  />
+                  <div className="flex items-center gap-2">
+                    <Switch
+                      checked={i.is_active}
+                      onCheckedChange={(val) => onToggle(i.id, val)}
+                    />
+                    <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive" onClick={() => onDelete(i.id)}>
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
                 </div>
                 <p className="text-xs text-muted-foreground mb-4">
                   Sync call outcome, transcripts and recordings to {i.provider}.

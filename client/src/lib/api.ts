@@ -119,6 +119,11 @@ export const workspaceRequest = {
     if (!workspaceId) throw new Error("No active workspace selected");
     return api.patch<T>(`/api/v1/workspaces/${workspaceId}${url}`, data, config);
   },
+  put: <T>(url: string, data?: any, config = {}) => {
+    const workspaceId = (window as any).getActiveWorkspaceId?.();
+    if (!workspaceId) throw new Error("No active workspace selected");
+    return api.put<T>(`/api/v1/workspaces/${workspaceId}${url}`, data, config);
+  },
   delete: <T>(url: string, config = {}) => {
     const workspaceId = (window as any).getActiveWorkspaceId?.();
     if (!workspaceId) throw new Error("No active workspace selected");

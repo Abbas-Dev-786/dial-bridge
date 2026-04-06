@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Phone, Loader2, CheckCircle, AlertCircle } from "lucide-react";
-import { useAvailableElevenLabsNumbersQuery, useImportElevenLabsNumberMutation } from "@/hooks/api/usePhoneNumbers";
+import { useAvailableElevenLabsNumbersQuery, usePhoneNumberMutations } from "@/hooks/api/usePhoneNumbers";
 import { useToast } from "@/hooks/use-toast";
 
 interface ImportElevenLabsNumberDialogProps {
@@ -27,7 +27,7 @@ export function ImportElevenLabsNumberDialog({ open, onOpenChange, onImported }:
   const [importing, setImporting] = useState(false);
 
   const { data: availableNumbers = [], isLoading } = useAvailableElevenLabsNumbersQuery(open);
-  const importMutation = useImportElevenLabsNumberMutation();
+  const { importElevenLabsNumber } = usePhoneNumberMutations();
 
   useEffect(() => {
     if (!open) {
@@ -51,7 +51,7 @@ export function ImportElevenLabsNumberDialog({ open, onOpenChange, onImported }:
     try {
       for (const id of selectedArray) {
         const numberToImport = availableNumbers.find(n => n.elevenlabs_number_id === id);
-        await importMutation.mutateAsync({
+        await importElevenLabsNumber.mutateAsync({
           elevenlabs_number_id: id,
           friendly_name: numberToImport?.label || ""
         });

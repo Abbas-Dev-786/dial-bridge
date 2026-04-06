@@ -99,6 +99,7 @@ export default function CampaignDetail() {
       <ExportDataDialog 
         open={dialogStates.export} 
         onOpenChange={(open) => setDialogState("export", open)} 
+        campaignId={id}
       />
       <DeleteConfirmDialog 
         open={dialogStates.deleteConfirm} 

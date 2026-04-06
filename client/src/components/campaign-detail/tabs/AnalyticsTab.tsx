@@ -13,19 +13,18 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-import { useAnalyticsQuery } from "@/hooks/api/useAnalytics";
-import { useCampaignDetailQuery, useCampaignMutations } from "@/hooks/api/useCampaigns";
+import { useCampaignDetailQuery, useCampaignAnalyticsQuery, useCampaignMutations } from "@/hooks/api/useCampaigns";
 import { CalendarIcon, Loader2, AlertTriangle, Trash2 } from "lucide-react";
 
 export function AnalyticsTab() {
   const { id } = useParams();
   const [dateRange, setDateRange] = useState({ from: "", to: "" });
 
-  const queryParams: any = { campaign_id: id };
+  const queryParams: any = {};
   if (dateRange.from) queryParams.date_from = dateRange.from;
   if (dateRange.to) queryParams.date_to = dateRange.to;
 
-  const { data: analytics, isLoading, refetch } = useAnalyticsQuery(queryParams);
+  const { data: analytics, isLoading, refetch } = useCampaignAnalyticsQuery(id, queryParams);
 
   const handleRefresh = () => {
     refetch();

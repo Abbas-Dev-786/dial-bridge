@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Search, Download, Upload, UserPlus, Edit, Trash2, CheckCircle, XCircle, ChevronLeft, ChevronRight, Ban, PhoneCall } from "lucide-react";
+import { Search, Download, Upload, UserPlus, Edit, Trash2, CheckCircle, XCircle, ChevronLeft, ChevronRight, Ban, PhoneCall, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useCampaignStore } from "@/store/useCampaignStore";
 import { useContactsQuery, useCampaignMutations } from "@/hooks/api/useCampaigns";
@@ -44,7 +44,7 @@ export function ContactsTab() {
   if (contactStatusFilter !== "all") params.status = [contactStatusFilter];
 
   const { data: contactsData = { items: [], total: 0 } } = useContactsQuery(id, params);
-  const { updateContact, deleteContact } = useCampaignMutations(id);
+  const { updateContact, deleteContact, markContactDNC, exportContacts } = useCampaignMutations(id);
 
   const handleEdit = (contact: any) => {
     setEditingContactId(contact.id);
@@ -81,9 +81,26 @@ export function ContactsTab() {
 
   const handleMarkDNC = (contactId: string) => {
     if (!id) return;
-    updateContact.mutate({ contactId, data: { is_dnc: true } }, {
+    markContactDNC.mutate(contactId, {
       onSuccess: () => toast({ title: "Contact marked as DNC" }),
       onError: () => toast({ title: "Operation failed", variant: "destructive" })
+    });
+  };
+
+  const handleExport = () => {
+    if (!id) return;
+    exportContacts.mutate(undefined, {
+      onSuccess: (data: any) => {
+        const url = window.URL.createObjectURL(new Blob([data]));
+        const link = document.createElement('a');
+        link.href = url;
+        link.setAttribute('download', `contacts_campaign_${id}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        toast({ title: "Export successful" });
+      },
+      onError: () => toast({ title: "Export failed", variant: "destructive" })
     });
   };
 
@@ -173,6 +190,10 @@ export function ContactsTab() {
           <p className="text-sm text-muted-foreground">{contactsData.total} contacts total</p>
         </div>
         <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={handleExport} disabled={exportContacts.isPending}>
+            {exportContacts.isPending ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Download className="mr-1.5 h-3.5 w-3.5" />}
+            Export CSV
+          </Button>
           <Button variant="outline" size="sm" onClick={() => setDialogState("importContacts", true)}>
             <Upload className="mr-1.5 h-3.5 w-3.5" /> Import CSV
           </Button>

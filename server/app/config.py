@@ -22,6 +22,17 @@ class Settings(BaseSettings):
     groq_model: str = "llama-3.3-70b-versatile"
     frontend_url: str = "http://localhost:8080"
 
+    # Google OAuth
+    google_oauth_client_id: str = ""
+
+    # Email Settings (Brevo / SMTP)
+    smtp_host: str = "smtp-relay.brevo.com"
+    smtp_port: int = 587
+    smtp_user: str = ""
+    smtp_password: str = ""
+    mail_from_email: str = "noreply@dialbridge.ai"
+    mail_from_name: str = "DialBridge"
+
     # Integrations
     hubspot_client_id: str = ""
     hubspot_client_secret: str = ""

@@ -1,7 +1,15 @@
 from fastapi import APIRouter, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.dependencies import get_db, get_current_user
-from app.schemas.auth import RegisterRequest, LoginRequest, TokenResponse, RefreshRequest
+from app.schemas.auth import (
+    RegisterRequest, 
+    LoginRequest, 
+    TokenResponse, 
+    RefreshRequest, 
+    GoogleLoginRequest,
+    ForgotPasswordRequest,
+    ResetPasswordRequest
+)
 from app.schemas.user import UserResponse
 from app.services import auth_service
 from app.models.user import User
@@ -23,3 +31,15 @@ async def refresh(data: RefreshRequest, db: AsyncSession = Depends(get_db)):
 @router.get("/me", response_model=UserResponse)
 async def me(current_user: User = Depends(get_current_user)):
     return current_user
+
+@router.post("/google", response_model=TokenResponse)
+async def google_login(data: GoogleLoginRequest, db: AsyncSession = Depends(get_db)):
+    return await auth_service.login_with_google(db, data)
+
+@router.post("/forgot-password")
+async def forgot_password(data: ForgotPasswordRequest, db: AsyncSession = Depends(get_db)):
+    return await auth_service.forgot_password(db, data)
+
+@router.post("/reset-password")
+async def reset_password(data: ResetPasswordRequest, db: AsyncSession = Depends(get_db)):
+    return await auth_service.reset_password(db, data)

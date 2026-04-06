@@ -18,6 +18,10 @@ class User(AppBase):
     last_sign_in_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
+    # Password Reset
+    reset_password_token: Mapped[str | None] = mapped_column(String, index=True)
+    reset_password_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
     # relationships
     workspace_memberships: Mapped[list["WorkspaceMember"]] = relationship(
         back_populates="user", 

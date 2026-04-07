@@ -30,7 +30,7 @@ import {
   AgentConfigCard,
   AgentActiveBanner,
 } from "@/components/agent-detail/AgentConfigCard";
-import { useAgentDetailQuery, useAgentMutations } from "@/hooks/api/useAgents";
+import { useAgentDetailQuery, useAgentMutations, useVoicesQuery } from "@/hooks/api/useAgents";
 
 export default function AgentDetail() {
   const navigate = useNavigate();
@@ -53,7 +53,8 @@ export default function AgentDetail() {
     isError,
     error,
   } = useAgentDetailQuery(id);
-  
+
+  const { data: voices, isLoading: isLoadingVoices } = useVoicesQuery();
   const { updateAgent, deleteAgent } = useAgentMutations(id);
 
   // Initialize form state from fetched data
@@ -297,6 +298,8 @@ export default function AgentDetail() {
                 <VoiceSettings
                   config={agentData.voice}
                   onChange={(v) => handleUpdate("voice", v)}
+                  voices={voices}
+                  isLoadingVoices={isLoadingVoices}
                 />
               </div>
             </CardContent>
@@ -412,6 +415,7 @@ export default function AgentDetail() {
             <VoicePlayground
               voiceConfig={agentData.voice}
               onVoiceConfigChange={(v) => handleUpdate("voice", v)}
+              voices={voices}
               agentName={agentData.name}
             />
           </div>

@@ -9,7 +9,8 @@ import { ContactsTab } from "@/components/campaign-detail/tabs/ContactsTab";
 import { CallsTab } from "@/components/campaign-detail/tabs/CallsTab";
 import { PhonesTab } from "@/components/campaign-detail/tabs/PhonesTab";
 import { KnowledgeBaseTab, IntegrationsTab } from "@/components/campaign-detail/tabs/KnowledgeBaseTab";
-import { AnalyticsTab, SettingsTab } from "@/components/campaign-detail/tabs/AnalyticsTab";
+import { AnalyticsTab } from "@/components/campaign-detail/tabs/AnalyticsTab";
+import { SettingsTab } from "@/components/campaign-detail/tabs/SettingsTab";
 
 // Dialogs
 import { BuyPhoneNumberDialog } from "@/components/dialogs/BuyPhoneNumberDialog";

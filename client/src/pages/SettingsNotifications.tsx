@@ -3,6 +3,7 @@ import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
 import { Mail, MessageSquare, Webhook, Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { getErrorMessage } from "@/lib/utils";
 
 const NOTIFICATION_GROUPS = [
   {
@@ -48,7 +49,7 @@ export default function SettingsNotifications() {
       channel_webhook: channel === 'webhook' ? value : current.channel_webhook,
     }, {
       onSuccess: () => toast.success("Preference updated"),
-      onError: () => toast.error("Failed to update preference")
+      onError: (err: any) => toast.error(getErrorMessage(err))
     });
   };
 

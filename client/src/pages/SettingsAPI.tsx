@@ -7,7 +7,7 @@ import { DeleteConfirmDialog } from "@/components/dialogs/DeleteConfirmDialog";
 
 import { useApiKeysQuery, useApiKeyMutations } from "@/hooks/api/useSettings";
 import { toast } from "sonner";
-import { formatDate } from "@/lib/utils";
+import { formatDate, getErrorMessage } from "@/lib/utils";
 
 export default function SettingsAPI() {
   const [visibleKeys, setVisibleKeys] = useState<string[]>([]);
@@ -29,7 +29,7 @@ export default function SettingsAPI() {
         setDeleteTarget(null);
       },
       onError: (err: any) => {
-        toast.error(err.response?.data?.detail || "Failed to revoke API key");
+        toast.error(getErrorMessage(err));
       }
     });
   };

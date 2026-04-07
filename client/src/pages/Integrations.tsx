@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Loader2, CheckCircle, Plus, ScrollText } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { getErrorMessage } from "@/lib/utils";
 import { useIntegrationProvidersQuery, useWorkspaceIntegrationsQuery, useIntegrationMutations } from "@/hooks/api/useSettings";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { ConnectApiKeyModal } from "@/components/dialogs/ConnectApiKeyModal";
@@ -49,7 +50,7 @@ export default function Integrations() {
       } catch (error) {
         toast({
           title: "OAuth failed",
-          description: "Could not initiate OAuth flow.",
+          description: getErrorMessage(error),
           variant: "destructive"
         });
       }
@@ -66,7 +67,7 @@ export default function Integrations() {
     if (!confirm("Are you sure you want to disconnect this integration?")) return;
     disconnectIntegration.mutate(integrationId, {
       onSuccess: () => toast({ title: "Integration disconnected" }),
-      onError: () => toast({ title: "Disconnect failed", variant: "destructive" }),
+      onError: (err: any) => toast({ title: "Disconnect failed", description: getErrorMessage(err), variant: "destructive" }),
     });
   };
 

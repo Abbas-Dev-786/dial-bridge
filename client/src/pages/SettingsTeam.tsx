@@ -8,6 +8,7 @@ import { InviteTeamMemberDialog } from "@/components/dialogs/InviteTeamMemberDia
 import { DeleteConfirmDialog } from "@/components/dialogs/DeleteConfirmDialog";
 import { toast } from "sonner";
 import { useMembersQuery, useMemberMutations } from "@/hooks/api/useSettings";
+import { getErrorMessage } from "@/lib/utils";
 
 interface Member {
   id: string;
@@ -35,8 +36,8 @@ export default function SettingsTeam() {
         toast.success("Member removed");
         setDeleteTarget(null);
       },
-      onError: () => {
-        toast.error("Failed to remove member");
+      onError: (err: any) => {
+        toast.error(getErrorMessage(err));
         setDeleteTarget(null);
       }
     });
@@ -45,7 +46,7 @@ export default function SettingsTeam() {
   const handleUpdateRole = (userId: string, newRole: string) => {
     updateRole.mutate({ userId, role: newRole }, {
       onSuccess: () => toast.success("Role updated"),
-      onError: () => toast.error("Failed to update role")
+      onError: (err: any) => toast.error(getErrorMessage(err))
     });
   };
 

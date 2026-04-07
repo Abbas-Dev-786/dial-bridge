@@ -3,6 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { Loader2, CheckCircle2, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuthMutations } from "@/hooks/api/useAuth";
+import { getErrorMessage } from "@/lib/utils";
 
 export default function AcceptInvite() {
   const { token } = useParams();
@@ -28,7 +29,7 @@ export default function AcceptInvite() {
       },
       onError: (err: any) => {
         setStatus("error");
-        setError(err.response?.data?.detail || "Failed to accept invitation. The link may be expired or invalid.");
+        setError(getErrorMessage(err));
       }
     });
   }, [token, navigate]);

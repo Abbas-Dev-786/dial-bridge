@@ -12,6 +12,7 @@ import { useAuthStore } from "@/store/useAuthStore";
 import { useWorkspaceStore } from "@/store/useWorkspaceStore";
 import { useToast } from "@/hooks/use-toast";
 import { useAuthMutations } from "@/hooks/api/useAuth";
+import { getErrorMessage } from "@/lib/utils";
 
 // Schema for Step 1: User Registration
 const registerSchema = z.object({
@@ -74,11 +75,10 @@ export default function SignUp() {
       },
       onError: (error: any) => {
         console.error("Registration failed:", error);
-        const detail = error.response?.data?.detail;
         toast({
           variant: "destructive",
           title: "Registration Failed",
-          description: detail || "Something went wrong. Please try again.",
+          description: getErrorMessage(error),
         });
       }
     });
@@ -99,11 +99,10 @@ export default function SignUp() {
       },
       onError: (error: any) => {
         console.error("Workspace creation failed:", error);
-        const detail = error.response?.data?.detail;
         toast({
           variant: "destructive",
           title: "Workspace Setup Failed",
-          description: detail || "Could not create workspace. Please try again.",
+          description: getErrorMessage(error),
         });
       }
     });

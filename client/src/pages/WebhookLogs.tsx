@@ -8,6 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { RefreshCw, Plus, Trash2, Copy, Globe, Settings, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { useWebhooksQuery, useWebhookLogsQuery, useWebhookMutations } from "@/hooks/api/useSettings";
+import { getErrorMessage } from "@/lib/utils";
 import { CreateWebhookEndpointDialog } from "@/components/dialogs/CreateWebhookEndpointDialog";
 import { formatDistanceToNow } from "date-fns";
 
@@ -44,14 +45,14 @@ export default function WebhookLogs() {
   const handleRetry = (deliveryId: string) => {
     retryDelivery.mutate(deliveryId, {
       onSuccess: () => toast.success("Delivery retry initiated"),
-      onError: () => toast.error("Failed to retry delivery")
+      onError: (err: any) => toast.error(getErrorMessage(err))
     });
   };
 
   const handleDelete = (endpointId: string) => {
     deleteWebhook.mutate(endpointId, {
       onSuccess: () => toast.success("Endpoint deleted"),
-      onError: () => toast.error("Failed to delete endpoint")
+      onError: (err: any) => toast.error(getErrorMessage(err))
     });
   };
 

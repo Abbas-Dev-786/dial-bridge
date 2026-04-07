@@ -11,6 +11,7 @@ import { Phone, Loader2 } from "lucide-react";
 import { useAuthStore } from "@/store/useAuthStore";
 import { useToast } from "@/hooks/use-toast";
 import { useAuthMutations } from "@/hooks/api/useAuth";
+import { getErrorMessage } from "@/lib/utils";
 
 const loginSchema = z.object({
   email: z.string().email("Invalid email address"),
@@ -59,22 +60,11 @@ export default function Login() {
       },
       onError: (error: any) => {
         console.error("Login failed:", error);
-        const status = error.response?.status;
-        const detail = error.response?.data?.detail;
-
-        if (status === 401) {
-          toast({
-            variant: "destructive",
-            title: "Authentication Failed",
-            description: detail || "Invalid email or password. Please try again.",
-          });
-        } else {
-          toast({
-            variant: "destructive",
-            title: "Error",
-            description: detail || "An unexpected error occurred. Please try again later.",
-          });
-        }
+        toast({
+          variant: "destructive",
+          title: "Authentication Failed",
+          description: getErrorMessage(error),
+        });
       }
     });
   };

@@ -9,6 +9,7 @@ import { Separator } from "@/components/ui/separator";
 import { useNavigate } from "react-router-dom";
 import { useCampaignStore } from "@/store/useCampaignStore";
 import { useCampaignDetailQuery, useCampaignMutations } from "@/hooks/api/useCampaigns";
+import { getErrorMessage } from "@/lib/utils";
 
 export function AgentsTab() {
   const navigate = useNavigate();
@@ -27,8 +28,8 @@ export function AgentsTab() {
       onSuccess: () => {
         toast({ title: "Agent regenerated", description: "The agent has been updated based on the campaign goal." });
       },
-      onError: () => {
-        toast({ title: "Regeneration failed", variant: "destructive" });
+      onError: (err: any) => {
+        toast({ title: "Regeneration failed", description: getErrorMessage(err), variant: "destructive" });
       }
     });
   };

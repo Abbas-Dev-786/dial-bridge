@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Search, Download, Upload, UserPlus, Edit, Trash2, CheckCircle, XCircle, ChevronLeft, ChevronRight, Ban, PhoneCall, Loader2 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, getErrorMessage } from "@/lib/utils";
 import { useCampaignStore } from "@/store/useCampaignStore";
 import { useContactsQuery, useCampaignMutations } from "@/hooks/api/useCampaigns";
 import { useToast } from "@/hooks/use-toast";
@@ -67,7 +67,7 @@ export function ContactsTab() {
         setEditingContactId(null);
         toast({ title: "Contact updated" });
       },
-      onError: () => toast({ title: "Update failed", variant: "destructive" })
+      onError: (err: any) => toast({ title: "Update failed", description: getErrorMessage(err), variant: "destructive" })
     });
   };
 
@@ -75,7 +75,7 @@ export function ContactsTab() {
     if (!id) return;
     deleteContact.mutate(contactId, {
       onSuccess: () => toast({ title: "Contact deleted" }),
-      onError: () => toast({ title: "Delete failed", variant: "destructive" })
+      onError: (err: any) => toast({ title: "Delete failed", description: getErrorMessage(err), variant: "destructive" })
     });
   };
 
@@ -83,7 +83,7 @@ export function ContactsTab() {
     if (!id) return;
     markContactDNC.mutate(contactId, {
       onSuccess: () => toast({ title: "Contact marked as DNC" }),
-      onError: () => toast({ title: "Operation failed", variant: "destructive" })
+      onError: (err: any) => toast({ title: "Operation failed", description: getErrorMessage(err), variant: "destructive" })
     });
   };
 
@@ -100,7 +100,7 @@ export function ContactsTab() {
         link.remove();
         toast({ title: "Export successful" });
       },
-      onError: () => toast({ title: "Export failed", variant: "destructive" })
+      onError: (err: any) => toast({ title: "Export failed", description: getErrorMessage(err), variant: "destructive" })
     });
   };
 

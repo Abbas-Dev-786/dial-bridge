@@ -24,7 +24,7 @@ import {
 } from "@/components/ConversationFlowSettings";
 import { ToolsConfig, ToolConfig } from "@/components/ToolsConfig";
 import { VoicePlayground } from "@/components/VoicePlayground";
-import { cn } from "@/lib/utils";
+import { cn, getErrorMessage } from "@/lib/utils";
 import { AgentHeader } from "@/components/agent-detail/AgentHeader";
 import {
   AgentConfigCard,
@@ -179,8 +179,7 @@ export default function AgentDetail() {
       onError: (err: any) => {
         toast({
           title: "Error saving changes",
-          description:
-            err.response?.data?.detail || "An unexpected error occurred.",
+          description: getErrorMessage(err),
           variant: "destructive",
         });
       }
@@ -199,8 +198,7 @@ export default function AgentDetail() {
       onError: (err: any) => {
         toast({
           title: "Error deleting agent",
-          description:
-            err.response?.data?.detail || "An unexpected error occurred.",
+          description: getErrorMessage(err),
           variant: "destructive",
         });
       }
@@ -233,8 +231,7 @@ export default function AgentDetail() {
             Failed to load agent
           </h3>
           <p className="text-sm text-muted-foreground">
-            {(error as any)?.response?.data?.detail ||
-              "An unexpected error occurred."}
+            {getErrorMessage(error)}
           </p>
         </div>
         <Button variant="outline" onClick={() => navigate("/agents")}>

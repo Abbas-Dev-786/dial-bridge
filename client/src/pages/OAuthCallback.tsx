@@ -3,6 +3,7 @@ import { useSearchParams, useNavigate } from "react-router-dom";
 import { Loader2, CheckCircle2, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuthMutations } from "@/hooks/api/useAuth";
+import { getErrorMessage } from "@/lib/utils";
 
 export default function OAuthCallback() {
   const [searchParams] = useSearchParams();
@@ -31,7 +32,7 @@ export default function OAuthCallback() {
       },
       onError: (err: any) => {
         setStatus("error");
-        setError(err.response?.data?.detail || "Failed to complete integration. Please try again.");
+        setError(getErrorMessage(err));
       }
     });
   }, [searchParams, navigate]);

@@ -25,7 +25,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
-import { cn } from "@/lib/utils";
+import { cn, getErrorMessage } from "@/lib/utils";
 
 export function PhonesTab() {
   const { id } = useParams();
@@ -52,7 +52,7 @@ export function PhonesTab() {
       onError: (err: any) => {
         toast({
           title: "Assignment failed",
-          description: err.response?.data?.detail || "Could not assign number",
+          description: getErrorMessage(err),
           variant: "destructive",
         });
       },

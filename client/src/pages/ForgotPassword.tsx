@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Phone, ArrowLeft, Mail, Loader2 } from "lucide-react";
 import { useAuthMutations } from "@/hooks/api/useAuth";
 import { toast } from "sonner";
+import { getErrorMessage } from "@/lib/utils";
 
 export default function ForgotPassword() {
   const [sent, setSent] = useState(false);
@@ -23,7 +24,7 @@ export default function ForgotPassword() {
         setSent(true);
       },
       onError: (err: any) => {
-        toast.error(err.response?.data?.detail || "Failed to send reset link");
+        toast.error(getErrorMessage(err));
       }
     });
   };

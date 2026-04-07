@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { CheckCircle, AlertTriangle, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { useWorkspaceProfileQuery, useElevenLabsStatusQuery, useWorkspaceMutations } from "@/hooks/api/useSettings";
+import { getErrorMessage } from "@/lib/utils";
 import { DeleteConfirmDialog } from "@/components/dialogs/DeleteConfirmDialog";
 import { useNavigate } from "react-router-dom";
 
@@ -38,7 +39,7 @@ export default function GeneralSettings() {
   const handleSave = () => {
     updateWorkspace.mutate({ name, timezone }, {
       onSuccess: () => toast.success("Settings saved successfully"),
-      onError: () => toast.error("Failed to save settings")
+      onError: (err: any) => toast.error(getErrorMessage(err))
     });
   };
 
@@ -50,7 +51,7 @@ export default function GeneralSettings() {
       },
       onError: (err: any) => {
         console.error(err);
-        toast.error(err.response?.data?.detail || "Failed to delete workspace");
+        toast.error(getErrorMessage(err));
       }
     });
   };

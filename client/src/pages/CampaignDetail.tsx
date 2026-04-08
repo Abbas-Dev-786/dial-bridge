@@ -76,7 +76,10 @@ export default function CampaignDetail() {
         open={dialogStates.uploadDoc} 
         onOpenChange={(open) => setDialogState("uploadDoc", open)} 
         onUploadFile={(file) => uploadKnowledgeFile.mutate(file)}
-        onAddUrl={(url) => addKnowledgeUrl.mutate({ url, name: url })}
+        onAddUrl={(url) => {
+          const formattedUrl = url.startsWith('http') ? url : `https://${url}`;
+          addKnowledgeUrl.mutate({ source_url: formattedUrl, name: url });
+        }}
       />
       <ConnectIntegrationDialog 
         open={dialogStates.connectIntegration} 

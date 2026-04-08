@@ -14,7 +14,6 @@ import {
   Loader2,
 } from "lucide-react";
 import { WelcomeBanner } from "@/components/dashboard/WelcomeBanner";
-import { OnboardingStepper } from "@/components/dashboard/OnboardingStepper";
 import { ActiveCampaignsGrid } from "@/components/dashboard/ActiveCampaignsGrid";
 import { QuickStats } from "@/components/dashboard/QuickStats";
 import { DashboardEmptyState } from "@/components/dashboard/DashboardEmptyState";
@@ -92,8 +91,6 @@ export default function Dashboard() {
   return (
     <div className="space-y-6">
       <WelcomeBanner activeCount={activeCampaigns.length} />
-
-      <OnboardingStepper />
 
       <ActiveCampaignsGrid campaigns={activeCampaigns} />
 

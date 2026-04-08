@@ -36,9 +36,3 @@ export const STATUS_TRANSITIONS: Record<CampaignStatus, { label: string; icon: a
   archived: [],
 };
 
-export const CAMPAIGN_MOCK_DATA: Record<string, { name: string; status: CampaignStatus }> = {
-  "1": { name: "Q1 Outreach", status: "live" },
-  "2": { name: "Product Launch", status: "paused" },
-  "3": { name: "Survey Q1", status: "draft" },
-  "4": { name: "Re-engagement", status: "completed" },
-};

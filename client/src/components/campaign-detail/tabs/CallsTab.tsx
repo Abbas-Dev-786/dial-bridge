@@ -12,13 +12,13 @@ export function CallsTab() {
   const calls = callsData?.items || [];
 
   const callColumns: Column<any>[] = [
-    { key: "contact_name", label: "Name", render: (r) => <span className="font-medium">{r.contact?.full_name || r.contact_name || "Unknown"}</span> },
-    { key: "contact_number", label: "Number", hideOnMobile: true, render: (r) => <span className="font-mono text-xs text-muted-foreground">{r.contact_number}</span> },
-    { key: "agent", label: "Agent", hideOnMobile: true, render: (r) => <span className="text-xs">{r.agent?.name}</span> },
+    { key: "contact_name", label: "Name", render: (r) => <span className="font-medium">{r.contact_name || "Unknown"}</span> },
+    { key: "contact_phone", label: "Number", hideOnMobile: true, render: (r) => <span className="font-mono text-xs text-muted-foreground">{r.contact_phone || "—"}</span> },
+    { key: "agent_name", label: "Agent", hideOnMobile: true, render: (r) => <span className="text-xs">{r.agent_name || "—"}</span> },
     { key: "status", label: "Status", render: (r) => <StatusBadge status={r.status} /> },
-    { key: "duration_seconds", label: "Duration", hideOnMobile: true, render: (r) => <span className="font-mono text-sm">{r.duration_seconds}s</span> },
-    { key: "outcome", label: "Outcome", hideOnMobile: true, render: (r) => <Badge variant="secondary" className="text-xs font-normal">{r.disposition || "None"}</Badge> },
-    { key: "cost_cents", label: "Cost", hideOnMobile: true, render: (r) => <span className="font-mono text-xs">${((r.cost_cents || 0) / 100).toFixed(2)}</span> },
+    { key: "duration_seconds", label: "Duration", hideOnMobile: true, render: (r) => <span className="font-mono text-sm">{r.duration_seconds ?? 0}s</span> },
+    { key: "outcome", label: "Outcome", hideOnMobile: true, render: (r) => <Badge variant="secondary" className="text-xs font-normal">{r.outcome || "None"}</Badge> },
+    { key: "total_cost_cents", label: "Cost", hideOnMobile: true, render: (r) => <span className="font-mono text-xs">${((r.total_cost_cents || 0) / 100).toFixed(2)}</span> },
   ];
 
   return (

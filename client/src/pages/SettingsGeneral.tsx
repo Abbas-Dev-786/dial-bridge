@@ -111,7 +111,9 @@ export default function GeneralSettings() {
                 <CheckCircle className="h-4 w-4 text-success shrink-0" />
                 <div className="flex-1">
                   <p className="text-sm font-medium text-success">Active & Verified</p>
-                  <p className="text-xs text-muted-foreground">Using platform-wide credentials</p>
+                  <p className="text-xs text-muted-foreground">
+                    Using platform-wide credentials{elevenLabs?.webhook_secret_configured ? " and webhook signing" : ""}
+                  </p>
                 </div>
               </div>
             ) : (
@@ -131,6 +133,21 @@ export default function GeneralSettings() {
                 readOnly 
                 className="bg-muted text-xs font-mono" 
               />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Webhook Tracking</Label>
+              <Input
+                value={elevenLabs?.webhook_secret_configured ? "READY" : "ACTION REQUIRED"}
+                readOnly
+                className="bg-muted text-xs font-mono"
+              />
+              <p className="text-xs text-muted-foreground">
+                Live campaign progress depends on ElevenLabs webhook delivery to <code>/webhooks/elevenlabs</code>.
+                {elevenLabs?.webhook_secret_configured
+                  ? " Signature verification is configured."
+                  : " Configure ELEVENLABS_WEBHOOK_SECRET to secure and verify incoming events."}
+              </p>
             </div>
           </CardContent>
         </Card>

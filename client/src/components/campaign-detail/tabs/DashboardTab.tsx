@@ -1,6 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import { Users, CheckCircle, XCircle, DollarSign, ArrowRight, TrendingUp, PhoneCall } from "lucide-react";
+import { Users, CheckCircle, XCircle, ArrowRight, TrendingUp, PhoneCall, LoaderCircle } from "lucide-react";
 import { DataTable, Column } from "@/components/shared/DataTable";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { Badge } from "@/components/ui/badge";
@@ -20,24 +20,22 @@ export function DashboardTab() {
   const recentCalls = callsData?.items || [];
 
   const stats = {
-    contacted: activeCampaign?.contacts_called || 0,
-    totalContacts: activeCampaign?.total_contacts || 0,
-    successRate: activeCampaign?.contacts_called > 0 
-      ? Math.round((activeCampaign.calls_successful / activeCampaign.contacts_called) * 100) 
-      : 0,
+    reached: activeCampaign?.contacts_reached || 0,
+    totalContacts: activeCampaign?.contacts_total || 0,
+    pending: activeCampaign?.contacts_pending || 0,
+    inProgress: activeCampaign?.contacts_calling || 0,
     failed: activeCampaign?.calls_failed || 0,
-    spend: (activeCampaign?.total_spend_cents || 0) / 100,
-    remaining: activeCampaign?.contacts_remaining || 0,
+    completed: activeCampaign?.contacts_called || 0,
   };
 
   const callColumns: Column<any>[] = [
-    { key: "contact_name", label: "Name", render: (r) => <span className="font-medium">{r.contact?.full_name || r.contact_name || "Unknown"}</span> },
-    { key: "contact_number", label: "Number", hideOnMobile: true, render: (r) => <span className="font-mono text-xs text-muted-foreground">{r.contact_number}</span> },
-    { key: "agent", label: "Agent", hideOnMobile: true, render: (r) => <span className="text-xs">{r.agent?.name}</span> },
+    { key: "contact_name", label: "Name", render: (r) => <span className="font-medium">{r.contact_name || "Unknown"}</span> },
+    { key: "contact_phone", label: "Number", hideOnMobile: true, render: (r) => <span className="font-mono text-xs text-muted-foreground">{r.contact_phone || "—"}</span> },
+    { key: "agent_name", label: "Agent", hideOnMobile: true, render: (r) => <span className="text-xs">{r.agent_name || "—"}</span> },
     { key: "status", label: "Status", render: (r) => <StatusBadge status={r.status} /> },
-    { key: "duration_seconds", label: "Duration", hideOnMobile: true, render: (r) => <span className="font-mono text-sm">{r.duration_seconds}s</span> },
-    { key: "outcome", label: "Outcome", hideOnMobile: true, render: (r) => <Badge variant="secondary" className="text-xs font-normal">{r.disposition || "None"}</Badge> },
-    { key: "cost_cents", label: "Cost", hideOnMobile: true, render: (r) => <span className="font-mono text-xs">${((r.cost_cents || 0) / 100).toFixed(2)}</span> },
+    { key: "duration_seconds", label: "Duration", hideOnMobile: true, render: (r) => <span className="font-mono text-sm">{r.duration_seconds ?? 0}s</span> },
+    { key: "outcome", label: "Outcome", hideOnMobile: true, render: (r) => <Badge variant="secondary" className="text-xs font-normal">{r.outcome || "None"}</Badge> },
+    { key: "total_cost_cents", label: "Cost", hideOnMobile: true, render: (r) => <span className="font-mono text-xs">${((r.total_cost_cents || 0) / 100).toFixed(2)}</span> },
   ];
 
   return (
@@ -47,20 +45,29 @@ export function DashboardTab() {
           <div className="flex items-center gap-3">
             <div className="rounded-lg bg-primary/10 p-2"><Users className="h-4 w-4 text-primary" /></div>
             <div>
-              <p className="text-xs text-muted-foreground">Called</p>
-              <p className="text-xl font-bold">{stats.contacted.toLocaleString()} <span className="text-xs font-normal text-muted-foreground">/ {stats.totalContacts.toLocaleString()}</span></p>
+              <p className="text-xs text-muted-foreground">Reached</p>
+              <p className="text-xl font-bold">{stats.reached.toLocaleString()} <span className="text-xs font-normal text-muted-foreground">/ {stats.totalContacts.toLocaleString()}</span></p>
             </div>
           </div>
-          <Progress value={stats.totalContacts > 0 ? (stats.contacted / stats.totalContacts) * 100 : 0} className="mt-3 h-1.5" />
+          <Progress value={stats.totalContacts > 0 ? (stats.reached / stats.totalContacts) * 100 : 0} className="mt-3 h-1.5" />
         </Card>
         <Card className="p-4">
           <div className="flex items-center gap-3">
             <div className="rounded-lg bg-success/10 p-2"><CheckCircle className="h-4 w-4 text-success" /></div>
             <div>
-              <p className="text-xs text-muted-foreground">Success Rate</p>
+              <p className="text-xs text-muted-foreground">Pending</p>
               <div className="flex items-baseline gap-2">
-                <p className="text-xl font-bold">{stats.successRate}%</p>
+                <p className="text-xl font-bold">{stats.pending}</p>
               </div>
+            </div>
+          </div>
+        </Card>
+        <Card className="p-4">
+          <div className="flex items-center gap-3">
+            <div className="rounded-lg bg-accent p-2"><LoaderCircle className="h-4 w-4 text-primary" /></div>
+            <div>
+              <p className="text-xs text-muted-foreground">In Progress</p>
+              <p className="text-xl font-bold">{stats.inProgress}</p>
             </div>
           </div>
         </Card>
@@ -70,15 +77,6 @@ export function DashboardTab() {
             <div>
               <p className="text-xs text-muted-foreground">Failed</p>
               <p className="text-xl font-bold">{stats.failed}</p>
-            </div>
-          </div>
-        </Card>
-        <Card className="p-4">
-          <div className="flex items-center gap-3">
-            <div className="rounded-lg bg-accent p-2"><DollarSign className="h-4 w-4 text-muted-foreground" /></div>
-            <div>
-              <p className="text-xs text-muted-foreground">Total Spend</p>
-              <p className="text-xl font-bold font-mono">${stats.spend.toFixed(2)}</p>
             </div>
           </div>
         </Card>
@@ -93,10 +91,11 @@ export function DashboardTab() {
           </CardHeader>
           <CardContent className="space-y-1">
             {[
-              { label: "Agent", value: activeCampaign?.agent?.name || "None", click: "agents" },
-              { label: "Phone Number", value: activeCampaign?.phone_number?.phone_number || "None", click: "phones" },
+              { label: "Agent", value: activeCampaign?.agent_name || "None", click: "agents" },
+              { label: "Phone Number", value: activeCampaign?.phone_number || "None", click: "phones" },
               { label: "Contacts", value: `${stats.totalContacts} total`, click: "contacts" },
-              { label: "Remaining", value: `${stats.remaining} to call`, click: "contacts" },
+              { label: "Pending", value: `${stats.pending} to call`, click: "contacts" },
+              { label: "Completed", value: `${stats.completed} finished`, click: "contacts" },
             ].map((item) => (
               <button
                 key={item.label}

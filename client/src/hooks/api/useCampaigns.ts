@@ -2,6 +2,33 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { workspaceRequest } from "@/lib/api";
 import { useWorkspaceStore } from "@/store/useWorkspaceStore";
 
+export type CampaignStatus = "draft" | "scheduled" | "live" | "paused" | "completed" | "archived";
+
+export interface CampaignSummary {
+  id: string;
+  name: string;
+  status: CampaignStatus;
+  agent_name: string | null;
+  phone_number: string | null;
+  contacts_total: number;
+  contacts_called: number;
+  contacts_remaining: number;
+  contacts_pending: number;
+  contacts_calling: number;
+  contacts_reached: number;
+  calls_successful: number;
+  calls_failed: number;
+  total_spend_cents: number;
+}
+
+export function getLiveCampaignRefetchInterval(
+  status?: string,
+  isDocumentHidden: boolean = typeof document !== "undefined" ? document.hidden : false,
+) {
+  if (isDocumentHidden) return false;
+  return status === "live" ? 5000 : false;
+}
+
 export function useCampaignsQuery(params: any = {}) {
   const { activeWorkspaceId } = useWorkspaceStore();
 
@@ -24,16 +51,19 @@ export function useCampaignDetailQuery(campaignId?: string) {
     queryFn: async () => {
       if (!activeWorkspaceId) throw new Error("No active workspace selected");
       if (!campaignId) throw new Error("No campaign ID");
-      const response = await workspaceRequest.get<any>(`/campaigns/${campaignId}`);
+      const response = await workspaceRequest.get<CampaignSummary>(`/campaigns/${campaignId}`);
       return response.data;
     },
     enabled: !!activeWorkspaceId && !!campaignId,
+    refetchInterval: (query) => getLiveCampaignRefetchInterval(query.state.data?.status),
+    refetchIntervalInBackground: false,
   });
 }
 
 // Calls
 export function useCampaignCallsQuery(campaignId?: string, params: any = {}) {
   const { activeWorkspaceId } = useWorkspaceStore();
+  const queryClient = useQueryClient();
   
   return useQuery({
     queryKey: ["campaign_calls", activeWorkspaceId, campaignId, params],
@@ -43,12 +73,18 @@ export function useCampaignCallsQuery(campaignId?: string, params: any = {}) {
       return response.data;
     },
     enabled: !!activeWorkspaceId && !!campaignId,
+    refetchInterval: () => {
+      const campaign = queryClient.getQueryData<CampaignSummary>(["campaign", activeWorkspaceId, campaignId]);
+      return getLiveCampaignRefetchInterval(campaign?.status);
+    },
+    refetchIntervalInBackground: false,
   });
 }
 
 // Contacts
 export function useContactsQuery(campaignId?: string, params: any = {}) {
   const { activeWorkspaceId } = useWorkspaceStore();
+  const queryClient = useQueryClient();
   
   return useQuery({
     queryKey: ["campaign_contacts", activeWorkspaceId, campaignId, params],
@@ -58,6 +94,11 @@ export function useContactsQuery(campaignId?: string, params: any = {}) {
       return response.data;
     },
     enabled: !!activeWorkspaceId && !!campaignId,
+    refetchInterval: () => {
+      const campaign = queryClient.getQueryData<CampaignSummary>(["campaign", activeWorkspaceId, campaignId]);
+      return getLiveCampaignRefetchInterval(campaign?.status);
+    },
+    refetchIntervalInBackground: false,
   });
 }
 

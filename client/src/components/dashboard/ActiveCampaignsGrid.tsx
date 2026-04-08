@@ -41,6 +41,7 @@ export function ActiveCampaignsGrid({ campaigns }: ActiveCampaignsGridProps) {
       <div className="grid gap-4 sm:grid-cols-2">
         {campaigns.map((c) => {
           const progress = c.total_contacts > 0 ? Math.round((c.processed_contacts / c.total_contacts) * 100) : 0;
+          const successRate = c.processed_contacts > 0 ? Math.round((c.success_count / c.processed_contacts) * 100) : 0;
           return (
             <button
               key={c.id}
@@ -62,7 +63,7 @@ export function ActiveCampaignsGrid({ campaigns }: ActiveCampaignsGridProps) {
               <div className="grid grid-cols-3 gap-2 border-t pt-4">
                 <div>
                   <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Success</p>
-                  <p className="text-sm font-bold">{c.total_contacts > 0 ? Math.round((c.success_count / c.processed_contacts || 0) * 100) : 0}%</p>
+                  <p className="text-sm font-bold">{successRate}%</p>
                 </div>
                 <div>
                   <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Spent</p>

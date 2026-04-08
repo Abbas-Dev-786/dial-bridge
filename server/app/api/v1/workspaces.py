@@ -81,5 +81,6 @@ async def get_elevenlabs_status(workspace_id: UUID, member: WorkspaceMember = De
     return {
         "is_configured": bool(settings.elevenlabs_api_key),
         "api_base_url": settings.elevenlabs_base_url,
-        "uses_platform_account": True
+        "uses_platform_account": True,
+        "webhook_secret_configured": bool(settings.elevenlabs_webhook_secret),
     }

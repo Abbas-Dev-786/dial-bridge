@@ -5,7 +5,8 @@ import logging
 from datetime import datetime, timedelta
 from typing import Dict, Any
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, update, func
+from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 from app.models.call import Call, CallTranscript, CallEvaluation, CallCollectedData
 from app.models.contact import Contact
 from app.models.campaign import Campaign
@@ -16,6 +17,16 @@ from app.models.workspace import Workspace
 from app.background.outgoing_webhooks import enqueue_webhook_delivery
 
 logger = logging.getLogger(__name__)
+
+TERMINAL_CALL_STATUSES = {
+    CallStatus.completed,
+    CallStatus.failed,
+    CallStatus.no_answer,
+    CallStatus.busy,
+    CallStatus.voicemail,
+    CallStatus.transferred,
+    CallStatus.timeout,
+}
 
 def verify_elevenlabs_signature(request_body: bytes, signature_header: str, secret: str) -> bool:
     """Verify HMAC signature from ElevenLabs."""
@@ -56,7 +67,11 @@ async def handle_elevenlabs_event(db: AsyncSession, event_type: str, payload: di
 async def handle_call_initiated(db: AsyncSession, payload: dict) -> None:
     conversation_id = payload.get("conversation_id")
     # Using fetch for later use
-    stmt = select(Call).where(Call.elevenlabs_conversation_id == conversation_id)
+    stmt = (
+        select(Call)
+        .where(Call.elevenlabs_conversation_id == conversation_id)
+        .options(selectinload(Call.contact), selectinload(Call.campaign))
+    )
     result = await db.execute(stmt)
     call = result.scalar_one_or_none()
     
@@ -72,31 +87,40 @@ async def handle_call_initiated(db: AsyncSession, payload: dict) -> None:
 
 async def handle_call_answered(db: AsyncSession, payload: dict) -> None:
     conversation_id = payload.get("conversation_id")
-    stmt = select(Call).where(Call.elevenlabs_conversation_id == conversation_id)
+    stmt = (
+        select(Call)
+        .where(Call.elevenlabs_conversation_id == conversation_id)
+        .options(selectinload(Call.contact), selectinload(Call.campaign))
+    )
     result = await db.execute(stmt)
     call = result.scalar_one_or_none()
     
     if not call:
         return
+    if call.status in TERMINAL_CALL_STATUSES:
+        return
 
     call.status = CallStatus.in_progress
     call.answered_at = datetime.fromtimestamp(payload.get("timestamp")) if payload.get("timestamp") else datetime.now()
     
-    if call.contact_id:
-        await db.execute(
-            update(Contact)
-            .where(Contact.id == call.contact_id)
-            .values(status=ContactStatus.calling, last_called_at=datetime.now())
-        )
+    if call.contact:
+        call.contact.status = ContactStatus.calling
+        call.contact.last_called_at = datetime.now()
 
 async def handle_call_ended(db: AsyncSession, payload: dict) -> None:
     conversation_id = payload.get("conversation_id")
-    stmt = select(Call).where(Call.elevenlabs_conversation_id == conversation_id)
+    stmt = (
+        select(Call)
+        .where(Call.elevenlabs_conversation_id == conversation_id)
+        .options(selectinload(Call.contact), selectinload(Call.campaign))
+    )
     result = await db.execute(stmt)
     call = result.scalar_one_or_none()
     
     if not call:
         logger.error(f"Call with conversation_id {conversation_id} not found during call.ended")
+        return
+    if call.status in TERMINAL_CALL_STATUSES:
         return
 
     outcome = payload.get("call_outcome", "completed") # outcome field mapping might vary
@@ -132,33 +156,35 @@ async def handle_call_ended(db: AsyncSession, payload: dict) -> None:
     
     call.raw_provider_payload = payload
 
-    # Update Contact
-    if call.contact_id:
-        await db.execute(
-            update(Contact)
-            .where(Contact.id == call.contact_id)
-            .values(
-                status=ContactStatus.called, 
-                last_called_at=datetime.now(),
-                last_outcome=outcome
-            )
+    contact = call.contact
+    campaign = call.campaign
+    retryable_outcome = False
+
+    if contact and campaign:
+        retryable_outcome = (
+            outcome in (campaign.retry_on_outcomes or [])
+            and (contact.retry_count or 0) < campaign.max_retries
         )
 
-    # Update Campaign Counters (Atomic)
-    if call.campaign_id:
-        await db.execute(
-            update(Campaign)
-            .where(Campaign.id == call.campaign_id)
-            .values(
-                contacts_called=Campaign.contacts_called + 1,
-                contacts_remaining=Campaign.contacts_remaining - 1,
-                calls_successful=Campaign.calls_successful + (1 if call.status == CallStatus.completed else 0),
-                calls_failed=Campaign.calls_failed + (1 if call.status == CallStatus.failed else 0),
-                total_spend_cents=Campaign.total_spend_cents + (
-                    call.cost_telephony_cents + call.cost_llm_cents + call.cost_tts_cents + call.cost_stt_cents
-                )
-            )
-        )
+    if contact:
+        contact.last_called_at = datetime.now()
+        contact.last_outcome = outcome
+
+        if retryable_outcome and campaign:
+            contact.retry_count = (contact.retry_count or 0) + 1
+            contact.status = ContactStatus.pending
+            contact.next_retry_at = datetime.now() + timedelta(minutes=campaign.retry_delay_minutes)
+        else:
+            contact.status = ContactStatus.called
+            contact.next_retry_at = None
+
+    if campaign:
+        campaign.total_spend_cents += _call_total_cost(call)
+        if call.status == CallStatus.completed:
+            campaign.calls_successful += 1
+        if not retryable_outcome:
+            campaign.contacts_called += 1
+            campaign.contacts_remaining = max(0, campaign.contacts_remaining - 1)
 
     # Update PhoneNumber stats
     if call.phone_number_id:
@@ -216,11 +242,17 @@ async def handle_summary(db: AsyncSession, payload: dict) -> None:
 
 async def handle_call_failed(db: AsyncSession, payload: dict) -> None:
     conversation_id = payload.get("conversation_id")
-    stmt = select(Call).where(Call.elevenlabs_conversation_id == conversation_id)
+    stmt = (
+        select(Call)
+        .where(Call.elevenlabs_conversation_id == conversation_id)
+        .options(selectinload(Call.contact), selectinload(Call.campaign))
+    )
     result = await db.execute(stmt)
     call = result.scalar_one_or_none()
     
     if not call:
+        return
+    if call.status in TERMINAL_CALL_STATUSES:
         return
 
     call.status = CallStatus.failed
@@ -229,32 +261,32 @@ async def handle_call_failed(db: AsyncSession, payload: dict) -> None:
     call.error_message = payload.get("error_message")
     call.raw_provider_payload = payload
 
-    if call.contact_id:
-        contact_stmt = select(Contact).where(Contact.id == call.contact_id)
-        contact_res = await db.execute(contact_stmt)
-        contact = contact_res.scalar_one_or_none()
-        
-        if contact:
-            contact.status = ContactStatus.failed
-            contact.retry_count += 1
-            
-            # Retry logic
-            if call.campaign_id:
-                camp_stmt = select(Campaign).where(Campaign.id == call.campaign_id)
-                camp_res = await db.execute(camp_stmt)
-                campaign = camp_res.scalar_one_or_none()
-                
-                if campaign and contact.retry_count < campaign.max_retries:
-                    # Check if error is in retry_on_outcomes
-                    # This is a simplified check
-                    contact.next_retry_at = datetime.now() + timedelta(minutes=campaign.retry_delay_minutes)
+    contact = call.contact
+    campaign = call.campaign
 
-    if call.campaign_id:
-        await db.execute(
-            update(Campaign)
-            .where(Campaign.id == call.campaign_id)
-            .values(calls_failed=Campaign.calls_failed + 1)
-        )
+    should_retry = bool(
+        contact
+        and campaign
+        and (contact.retry_count or 0) < campaign.max_retries
+    )
+
+    if contact:
+        contact.last_called_at = datetime.now()
+        contact.last_outcome = "failed"
+        contact.retry_count = (contact.retry_count or 0) + 1
+
+        if should_retry and campaign:
+            contact.status = ContactStatus.pending
+            contact.next_retry_at = datetime.now() + timedelta(minutes=campaign.retry_delay_minutes)
+        else:
+            contact.status = ContactStatus.failed
+            contact.next_retry_at = None
+
+    if campaign:
+        campaign.calls_failed += 1
+        if not should_retry:
+            campaign.contacts_called += 1
+            campaign.contacts_remaining = max(0, campaign.contacts_remaining - 1)
 
 async def run_post_call_processing(db: AsyncSession, call: Call) -> None:
     """Run summary generation and data extraction."""
@@ -269,3 +301,12 @@ async def run_post_call_processing(db: AsyncSession, call: Call) -> None:
 
     # 3. Fire outgoing webhooks
     await enqueue_webhook_delivery(db, call, "call.completed")
+
+
+def _call_total_cost(call: Call) -> int:
+    return (
+        (call.cost_telephony_cents or 0)
+        + (call.cost_llm_cents or 0)
+        + (call.cost_tts_cents or 0)
+        + (call.cost_stt_cents or 0)
+    )

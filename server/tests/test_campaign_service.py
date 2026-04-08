@@ -1,6 +1,7 @@
 import pytest
 import uuid
 from datetime import datetime, date, time
+from types import SimpleNamespace
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from unittest.mock import AsyncMock, patch, MagicMock
@@ -14,6 +15,7 @@ from app.enums import CampaignStatus, KBSyncStatus, LLMProvider, ToolType, Phone
 from app.services import campaign_service
 from app.exceptions import ValidationError, ConflictError
 from app.services.agent_generation_service import GeneratedAgentConfig
+from app.api.v1.workspaces import get_elevenlabs_status
 
 @pytest.fixture
 def mock_workspace():
@@ -147,9 +149,50 @@ async def test_build_campaign_response(mock_workspace):
         created_at=datetime.utcnow(),
         updated_at=datetime.utcnow()
     )
+    campaign.contacts_pending = 0
+    campaign.contacts_calling = 0
+    campaign.contacts_reached = 0
     
     response = campaign_service.build_campaign_response(campaign)
     assert response.agent_name == "Test Agent"
     assert response.agent_generation is not None
     assert response.agent_generation.was_generated is True
     assert response.agent_generation.system_prompt_preview == "Short prompt"
+
+
+@pytest.mark.asyncio
+async def test_apply_campaign_progress_aggregates_sets_defaults_and_counts():
+    campaign_one = Campaign(id=uuid.uuid4(), name="One", status=CampaignStatus.live)
+    campaign_two = Campaign(id=uuid.uuid4(), name="Two", status=CampaignStatus.paused)
+
+    mock_db = AsyncMock(spec=AsyncSession)
+    mock_db.execute.return_value = [
+        SimpleNamespace(
+            campaign_id=campaign_one.id,
+            contacts_pending=4,
+            contacts_calling=2,
+            contacts_reached=6,
+        )
+    ]
+
+    await campaign_service._apply_campaign_progress_aggregates(mock_db, [campaign_one, campaign_two])
+
+    assert campaign_one.contacts_pending == 4
+    assert campaign_one.contacts_calling == 2
+    assert campaign_one.contacts_reached == 6
+    assert campaign_two.contacts_pending == 0
+    assert campaign_two.contacts_calling == 0
+    assert campaign_two.contacts_reached == 0
+
+
+@pytest.mark.asyncio
+async def test_get_elevenlabs_status_includes_webhook_secret(monkeypatch):
+    from app.config import settings
+
+    monkeypatch.setattr(settings, "elevenlabs_api_key", "test-key")
+    monkeypatch.setattr(settings, "elevenlabs_webhook_secret", "secret-value")
+
+    status = await get_elevenlabs_status(uuid.uuid4(), member=object())
+
+    assert status["is_configured"] is True
+    assert status["webhook_secret_configured"] is True

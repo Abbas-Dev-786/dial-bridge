@@ -23,6 +23,9 @@ interface CampaignListItem {
   agent_generation_failed: boolean;
   contacts_total: number;
   contacts_called: number;
+  contacts_pending: number;
+  contacts_calling: number;
+  contacts_reached: number;
   calls_successful: number;
   total_spend_cents: number;
   kb_sync_status: "pending" | "syncing" | "synced" | "failed";
@@ -88,12 +91,12 @@ export function CampaignsList() {
     {
       key: "progress", label: "Progress", hideOnMobile: true,
       render: (r) => {
-        const progress = r.contacts_total > 0 ? (r.contacts_called / r.contacts_total) * 100 : 0;
+        const progress = r.contacts_total > 0 ? (r.contacts_reached / r.contacts_total) * 100 : 0;
         return (
           <div className="flex flex-col gap-1.5 min-w-[140px]">
             <div className="flex items-center justify-between gap-2">
               <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">
-                {r.contacts_called} / {r.contacts_total}
+                {r.contacts_reached} / {r.contacts_total}
               </span>
               <span className="text-[10px] font-medium">{progress.toFixed(0)}%</span>
             </div>
@@ -108,8 +111,8 @@ export function CampaignsList() {
       sortable: true, 
       hideOnMobile: true,
       render: (r) => {
-        if (r.contacts_called === 0) return <span className="text-muted-foreground">—</span>;
-        const rate = (r.calls_successful / r.contacts_called) * 100;
+        if (r.contacts_reached === 0) return <span className="text-muted-foreground">—</span>;
+        const rate = (r.calls_successful / r.contacts_reached) * 100;
         return <span className="font-medium">{rate.toFixed(0)}%</span>;
       }
     },

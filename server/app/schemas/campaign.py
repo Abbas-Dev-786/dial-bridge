@@ -111,6 +111,9 @@ class CampaignResponse(BaseModel):
     contacts_total: int
     contacts_called: int
     contacts_remaining: int
+    contacts_pending: int
+    contacts_calling: int
+    contacts_reached: int
     calls_successful: int
     calls_failed: int
     total_spend_cents: int
@@ -127,6 +130,9 @@ class CampaignListItem(BaseModel):
     agent_generation_failed: bool
     contacts_total: int
     contacts_called: int
+    contacts_pending: int
+    contacts_calling: int
+    contacts_reached: int
     calls_successful: int
     total_spend_cents: int
     kb_sync_status: KBSyncStatus

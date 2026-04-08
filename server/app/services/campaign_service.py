@@ -124,6 +124,7 @@ async def get_campaign(db: AsyncSession, workspace_id: uuid.UUID, campaign_id: u
     
     if not campaign:
         raise NotFoundError("Campaign")
+    await _apply_campaign_progress_aggregates(db, [campaign])
     return campaign
 
 async def list_campaigns(db: AsyncSession, workspace_id: uuid.UUID, status: CampaignStatus | list[CampaignStatus] | None = None) -> list[Campaign]:
@@ -144,7 +145,9 @@ async def list_campaigns(db: AsyncSession, workspace_id: uuid.UUID, status: Camp
             query = query.where(Campaign.status == status)
             
     result = await db.execute(query)
-    return list(result.scalars().all())
+    campaigns = list(result.scalars().all())
+    await _apply_campaign_progress_aggregates(db, campaigns)
+    return campaigns
 
 async def update_campaign(db: AsyncSession, campaign: Campaign, data: CampaignUpdate) -> Campaign:
     live_blocked_fields = [
@@ -459,6 +462,9 @@ def build_campaign_response(campaign: Campaign) -> CampaignResponse:
         contacts_total=campaign.contacts_total,
         contacts_called=campaign.contacts_called,
         contacts_remaining=campaign.contacts_remaining,
+        contacts_pending=getattr(campaign, "contacts_pending", 0),
+        contacts_calling=getattr(campaign, "contacts_calling", 0),
+        contacts_reached=getattr(campaign, "contacts_reached", 0),
         calls_successful=campaign.calls_successful,
         calls_failed=campaign.calls_failed,
         total_spend_cents=campaign.total_spend_cents,
@@ -473,3 +479,64 @@ def _stop_feeder(campaign: Campaign) -> None:
         # terminate=False lets the current iteration finish cleanly
         AsyncResult(campaign.feeder_task_id).revoke(terminate=False)
         campaign.feeder_task_id = None
+
+
+async def _apply_campaign_progress_aggregates(
+    db: AsyncSession,
+    campaigns: list[Campaign],
+) -> None:
+    campaign_ids = [campaign.id for campaign in campaigns]
+    if not campaign_ids:
+        return
+
+    progress_rows = await db.execute(
+        select(
+            Contact.campaign_id,
+            func.count(Contact.id)
+            .filter(Contact.status == ContactStatus.pending)
+            .label("contacts_pending"),
+            func.count(Contact.id)
+            .filter(Contact.status == ContactStatus.calling)
+            .label("contacts_calling"),
+            func.count(Contact.id)
+            .filter(
+                Contact.status.in_(
+                    [
+                        ContactStatus.calling,
+                        ContactStatus.called,
+                        ContactStatus.failed,
+                    ]
+                )
+            )
+            .label("contacts_reached"),
+        )
+        .where(
+            and_(
+                Contact.campaign_id.in_(campaign_ids),
+                Contact.deleted_at.is_(None),
+            )
+        )
+        .group_by(Contact.campaign_id)
+    )
+
+    progress_map = {
+        row.campaign_id: {
+            "contacts_pending": row.contacts_pending or 0,
+            "contacts_calling": row.contacts_calling or 0,
+            "contacts_reached": row.contacts_reached or 0,
+        }
+        for row in progress_rows
+    }
+
+    for campaign in campaigns:
+        progress = progress_map.get(
+            campaign.id,
+            {
+                "contacts_pending": 0,
+                "contacts_calling": 0,
+                "contacts_reached": 0,
+            },
+        )
+        campaign.contacts_pending = progress["contacts_pending"]
+        campaign.contacts_calling = progress["contacts_calling"]
+        campaign.contacts_reached = progress["contacts_reached"]

@@ -24,6 +24,17 @@ export interface Campaign {
   agent_name: string | null;
 }
 
+export interface CampaignListItemApi {
+  id: string;
+  name: string;
+  status: string;
+  agent_name: string | null;
+  contacts_total: number;
+  contacts_reached: number;
+  calls_successful: number;
+  total_spend_cents: number;
+}
+
 export interface CallListItem {
   id: string;
   contact_name: string | null;
@@ -35,6 +46,19 @@ export interface CallListItem {
   created_at: string;
 }
 
+export function mapCampaignListItemToDashboardCampaign(campaign: CampaignListItemApi): Campaign {
+  return {
+    id: campaign.id,
+    name: campaign.name,
+    status: campaign.status,
+    total_contacts: campaign.contacts_total,
+    processed_contacts: campaign.contacts_reached,
+    success_count: campaign.calls_successful,
+    cost_cents: campaign.total_spend_cents,
+    agent_name: campaign.agent_name,
+  };
+}
+
 export function useDashboardQueries() {
   const { activeWorkspaceId } = useWorkspaceStore();
 
@@ -44,12 +68,12 @@ export function useDashboardQueries() {
       if (!activeWorkspaceId) throw new Error("No active workspace selected");
       const [analyticsRes, campaignsRes, callsRes] = await Promise.all([
         workspaceRequest.get<{ overview: AnalyticsOverview }>("/analytics"),
-        workspaceRequest.get<Campaign[]>("/campaigns?status=live&status=paused"),
+        workspaceRequest.get<CampaignListItemApi[]>("/campaigns?status=live&status=paused"),
         workspaceRequest.get<{ items: CallListItem[] }>("/calls", { params: { page_size: 6 } })
       ]);
       return {
         analytics: analyticsRes.data.overview,
-        activeCampaigns: campaignsRes.data,
+        activeCampaigns: campaignsRes.data.map(mapCampaignListItemToDashboardCampaign),
         recentCalls: callsRes.data.items,
       };
     },

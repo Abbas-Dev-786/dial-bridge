@@ -166,14 +166,14 @@ class ElevenLabsClient:
 
     # ── Test & Session endpoints ──────────────────────────────
 
-    async def get_signed_url(self, agent_id: str) -> dict:
+    async def get_conversation_token(self, agent_id: str) -> dict:
         """
-        GET /convai/conversation/get-signed-url?agent_id={agent_id}
-        Returns: { "signed_url": str }
+        GET /convai/conversation/token?agent_id={agent_id}
+        Returns: { "token": str }
         """
         return await self._request(
             "GET",
-            "/convai/conversation/get-signed-url",
+            "/convai/conversation/token",
             params={"agent_id": agent_id},
         )
 

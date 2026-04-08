@@ -134,8 +134,9 @@ export function VoicePlayground({
 
   // Update transcript from final conversation details when available
   useEffect(() => {
-    if (finalConversation && finalConversation.transcript) {
-      const mapped = finalConversation.transcript.map((t: any) => ({
+    const transcriptData = finalConversation?.transcript;
+    if (transcriptData) {
+      const mapped: TranscriptMessage[] = transcriptData.map((t: any) => ({
         role: t.role === "agent" ? "agent" : "user",
         text: t.message,
         timestamp: "final",
@@ -170,15 +171,17 @@ export function VoicePlayground({
       setElapsed(0);
       setConversationId(null);
       
-      const { signed_url } = await startTestSession.mutateAsync();
+      const sessionData = await startTestSession.mutateAsync();
+      const token = sessionData.token;
       
       // Request microphone permission and start session
       await navigator.mediaDevices.getUserMedia({ audio: true });
       
-      const convId = await conversation.startSession({
-        signedUrl: signed_url,
+      await conversation.startSession({
+        conversationToken: token,
       });
-      setConversationId(convId);
+      const convId = conversation.getId();
+      if (convId) setConversationId(convId);
     } catch (error) {
       console.error("Failed to start session:", error);
     }
@@ -600,7 +603,7 @@ export function VoicePlayground({
       </div>
 
       {/* Recording Player (Final) */}
-      {finalConversation && finalConversation.audio_url && (
+      {finalConversation?.audio_url && (
         <div className="rounded-2xl border bg-primary/5 p-4 flex items-center justify-between animate-in zoom-in duration-300">
           <div className="flex items-center gap-3">
             <div className="bg-primary/20 p-2 rounded-full">

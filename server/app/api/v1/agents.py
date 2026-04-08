@@ -178,7 +178,7 @@ async def create_test_session(
 
     from app.services.elevenlabs_client import ElevenLabsClient
     async with ElevenLabsClient() as client:
-        return await client.get_signed_url(agent.elevenlabs_agent_id)
+        return await client.get_conversation_token(agent.elevenlabs_agent_id)
 
 @router.get("/{workspace_id}/agents/{agent_id}/test/conversations/{conversation_id}")
 async def get_test_conversation(

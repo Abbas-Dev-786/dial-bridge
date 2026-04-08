@@ -27,9 +27,24 @@ class ElevenLabsClient:
         # Default to JSON content type if sending a payload and not otherwise specified
         if "json" in kwargs and "headers" not in kwargs:
             kwargs["headers"] = {"Content-Type": "application/json"}
+        
+        # Log the request for debugging
+        # Ensure path starts with / but base_url doesn't end with one (or vice versa)
+        base = str(self._client.base_url).rstrip("/")
+        normalized_path = "/" + path.lstrip("/")
+        full_url = f"{base}{normalized_path}"
+        print(f"DEBUG: ElevenLabs Request: {method} {full_url}")
+        if "json" in kwargs:
+            print(f"DEBUG: Payload: {kwargs['json']}")
+        if "params" in kwargs:
+            print(f"DEBUG: Params: {kwargs['params']}")
             
         response = await self._client.request(method, path, **kwargs)
+        
+        # Log the response
+        print(f"DEBUG: ElevenLabs Response Status: {response.status_code}")
         if not response.is_success:
+            print(f"DEBUG: ElevenLabs Error Body: {response.text[:500]}")
             raise ElevenLabsError(
                 f"{response.status_code} — {response.text[:200]}"
             )
@@ -137,22 +152,24 @@ class ElevenLabsClient:
 
     async def assign_phone_to_agent(self, phone_number_id: str, agent_id: str) -> dict:
         """
-        POST /convai/phone-numbers/{phone_number_id}/assign
+        PATCH /convai/phone-numbers/{phone_number_id}
         Assigns the ElevenLabs number to an EL agent.
         """
         return await self._request(
-            "POST",
-            f"/convai/phone-numbers/{phone_number_id}/assign",
+            "PATCH",
+            f"/convai/phone-numbers/{phone_number_id}",
             json={"agent_id": agent_id},
         )
 
     async def unassign_phone_from_agent(self, phone_number_id: str) -> dict:
         """
-        POST /convai/phone-numbers/{phone_number_id}/unassign
+        PATCH /convai/phone-numbers/{phone_number_id}
+        Unassigns the agent from the phone number.
         """
         return await self._request(
-            "POST",
-            f"/convai/phone-numbers/{phone_number_id}/unassign",
+            "PATCH",
+            f"/convai/phone-numbers/{phone_number_id}",
+            json={"agent_id": None},
         )
 
     # ── Call endpoints ───────────────────────────────────────

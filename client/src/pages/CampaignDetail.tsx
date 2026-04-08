@@ -98,7 +98,7 @@ export default function CampaignDetail() {
       <ImportContactsDialog 
         open={dialogStates.importContacts} 
         onOpenChange={(open) => setDialogState("importContacts", open)} 
-        onImport={(file) => importContacts.mutate(file)}
+        mutation={importContacts}
       />
       <ExportDataDialog 
         open={dialogStates.export} 

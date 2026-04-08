@@ -1,8 +1,10 @@
 from uuid import UUID
 from datetime import datetime
+from urllib.parse import urlparse
 from sqlalchemy import select, and_
 from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
+from app.config import settings
 from app.models.agent import Agent, AgentVoiceConfig, AgentConversationConfig, AgentTool
 from app.models.workspace import Workspace
 from app.models.user import User
@@ -77,6 +79,15 @@ def build_elevenlabs_agent_payload(
     ]
     if server_tools:
         payload["conversation_config"]["agent"]["prompt"]["tools"] = server_tools
+
+    # Add security settings to allow the current frontend origin
+    frontend_hostname = urlparse(settings.frontend_url).netloc
+    if frontend_hostname:
+        payload["platform_settings"] = {
+            "auth": {
+                "allowlist": [{"hostname": frontend_hostname}]
+            }
+        }
 
     return payload
 

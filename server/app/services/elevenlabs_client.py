@@ -164,6 +164,35 @@ class ElevenLabsClient:
         """
         return await self._request("POST", "/convai/twilio/outbound-call", json=payload)
 
+    # ── Test & Session endpoints ──────────────────────────────
+
+    async def get_signed_url(self, agent_id: str) -> dict:
+        """
+        GET /convai/conversation/get-signed-url?agent_id={agent_id}
+        Returns: { "signed_url": str }
+        """
+        return await self._request(
+            "GET",
+            "/convai/conversation/get-signed-url",
+            params={"agent_id": agent_id},
+        )
+
+    async def get_conversation(self, conversation_id: str) -> dict:
+        """
+        GET /convai/conversations/{conversation_id}
+        """
+        return await self._request("GET", f"/convai/conversations/{conversation_id}")
+
+    async def get_conversation_audio(self, conversation_id: str) -> bytes:
+        """
+        GET /convai/conversations/{conversation_id}/audio
+        Returns the raw audio bytes.
+        """
+        response = await self._client.get(f"/convai/conversations/{conversation_id}/audio")
+        if not response.is_success:
+            raise ElevenLabsError(f"{response.status_code} — {response.text[:200]}")
+        return response.content
+
 
 def get_elevenlabs_client() -> ElevenLabsClient:
     """

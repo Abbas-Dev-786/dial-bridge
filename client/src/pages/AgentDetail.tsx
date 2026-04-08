@@ -31,6 +31,7 @@ import {
   AgentActiveBanner,
 } from "@/components/agent-detail/AgentConfigCard";
 import { useAgentDetailQuery, useAgentMutations, useVoicesQuery } from "@/hooks/api/useAgents";
+import { ConversationProvider } from "@elevenlabs/react";
 
 export default function AgentDetail() {
   const navigate = useNavigate();
@@ -45,6 +46,8 @@ export default function AgentDetail() {
 
   // Form State
   const [agentData, setAgentData] = useState<any>(null);
+  const [initialDataStr, setInitialDataStr] = useState("");
+  const [isDirty, setIsDirty] = useState(false);
 
   // Fetch Agent
   const {
@@ -83,7 +86,7 @@ export default function AgentDetail() {
           })),
       };
 
-      setAgentData({
+      const newData = {
         name: agent.name,
         llm_model: agent.llm_model,
         temperature: agent.temperature,
@@ -104,20 +107,31 @@ export default function AgentDetail() {
           endCallAfterSilence: (
             c?.end_call_after_silence_secs || 30
           ).toString(),
-          interruptionSensitivity: c?.interruption_sensitivity || "medium",
-          turnEndpointDelay: (c?.turn_endpoint_delay_ms || 500).toString(),
-          enableBackchannel: c?.enable_backchannel ?? true,
-          enableDataCollection: c?.enable_data_collection ?? false,
-          dataCollectionFields: JSON.stringify(
+          interruption_sensitivity: c?.interruption_sensitivity || "medium",
+          turn_endpoint_delay_ms: (c?.turn_endpoint_delay_ms || 500).toString(),
+          enable_backchannel: c?.enable_backchannel ?? true,
+          enable_data_collection: c?.enable_data_collection ?? false,
+          data_collection_fields: JSON.stringify(
             c?.data_collection_fields || [],
             null,
             2,
           ),
         },
         tools: mappedTools,
-      });
+      };
+
+      setAgentData(newData);
+      setInitialDataStr(JSON.stringify(newData));
+      setIsDirty(false);
     }
   }, [agent]);
+
+  // Track dirty state
+  useEffect(() => {
+    if (agentData && initialDataStr) {
+      setIsDirty(JSON.stringify(agentData) !== initialDataStr);
+    }
+  }, [agentData, initialDataStr]);
 
   // Mutations
   const handleSave = () => {
@@ -412,12 +426,16 @@ export default function AgentDetail() {
         <DrawerContent className="max-h-[85vh]">
           <DrawerTitle className="sr-only">Voice Playground</DrawerTitle>
           <div className="overflow-y-auto p-4 pb-8">
-            <VoicePlayground
-              voiceConfig={agentData.voice}
-              onVoiceConfigChange={(v) => handleUpdate("voice", v)}
-              voices={voices}
-              agentName={agentData.name}
-            />
+            <ConversationProvider>
+              <VoicePlayground
+                voiceConfig={agentData.voice}
+                onVoiceConfigChange={(v) => handleUpdate("voice", v)}
+                voices={voices}
+                agentName={agentData.name}
+                agentId={id}
+                isDirty={isDirty}
+              />
+            </ConversationProvider>
           </div>
         </DrawerContent>
       </Drawer>

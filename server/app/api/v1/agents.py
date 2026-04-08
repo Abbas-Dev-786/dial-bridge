@@ -155,3 +155,84 @@ async def list_available_voices(
     from app.services.elevenlabs_client import ElevenLabsClient
     async with ElevenLabsClient() as client:
         return await client.list_voices()
+
+# ── Testing ──────────────────────────────────────────────────
+
+@router.post("/{workspace_id}/agents/{agent_id}/test/session")
+async def create_test_session(
+    workspace_id: UUID,
+    agent_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    member: WorkspaceMember = Depends(get_workspace_member),
+):
+    """
+    Generate a signed WebRTC session URL for testing the saved agent.
+    """
+    agent = await agent_service.get_agent(db, workspace_id, agent_id)
+    if not agent.elevenlabs_agent_id:
+        from fastapi import HTTPException
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Agent has not been synced with ElevenLabs yet."
+        )
+
+    from app.services.elevenlabs_client import ElevenLabsClient
+    async with ElevenLabsClient() as client:
+        return await client.get_signed_url(agent.elevenlabs_agent_id)
+
+@router.get("/{workspace_id}/agents/{agent_id}/test/conversations/{conversation_id}")
+async def get_test_conversation(
+    workspace_id: UUID,
+    agent_id: UUID,
+    conversation_id: str,
+    db: AsyncSession = Depends(get_db),
+    member: WorkspaceMember = Depends(get_workspace_member),
+):
+    """
+    Get details for a specific test conversation.
+    """
+    # Verify agent exists in workspace
+    await agent_service.get_agent(db, workspace_id, agent_id)
+
+    from app.services.elevenlabs_client import ElevenLabsClient
+    async with ElevenLabsClient() as client:
+        data = await client.get_conversation(conversation_id)
+        
+        # Normalize response for frontend
+        return {
+            "conversation_id": data.get("conversation_id"),
+            "status": data.get("status"),
+            "agent_id": data.get("agent_id"),
+            "conversation_type": data.get("conversation_type"),
+            "start_time_unix_secs": data.get("start_time_unix_secs"),
+            "duration_seconds": data.get("duration_seconds"),
+            "transcript": data.get("transcript", []),
+            "metadata": data.get("metadata", {}),
+            "analysis": data.get("analysis", {}),
+            "audio_url": f"/api/v1/workspaces/{workspace_id}/agents/{agent_id}/test/conversations/{conversation_id}/audio"
+        }
+
+@router.get("/{workspace_id}/agents/{agent_id}/test/conversations/{conversation_id}/audio")
+async def get_test_conversation_audio(
+    workspace_id: UUID,
+    agent_id: UUID,
+    conversation_id: str,
+    db: AsyncSession = Depends(get_db),
+    member: WorkspaceMember = Depends(get_workspace_member),
+):
+    """
+    Proxy the finalized conversation recording from ElevenLabs.
+    """
+    # Verify agent exists in workspace
+    await agent_service.get_agent(db, workspace_id, agent_id)
+
+    from app.services.elevenlabs_client import ElevenLabsClient
+    async with ElevenLabsClient() as client:
+        audio_content = await client.get_conversation_audio(conversation_id)
+        return Response(
+            content=audio_content,
+            media_type="audio/mpeg",
+            headers={
+                "Content-Disposition": f"attachment; filename=conversation_{conversation_id}.mp3"
+            }
+        )

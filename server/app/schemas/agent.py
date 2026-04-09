@@ -1,7 +1,8 @@
 from uuid import UUID
 from datetime import datetime
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from app.enums import AgentStatus, LLMProvider, InterruptionSensitivity, ToolType, HttpMethod
+from app.utils.prompt_validation import validate_first_message_text, validate_system_prompt_text
 
 # Voice config
 class VoiceConfigCreate(BaseModel):
@@ -49,8 +50,8 @@ class AgentToolResponse(AgentToolCreate):
 class AgentCreate(BaseModel):
     name: str
     description: str | None = None
-    llm_provider: LLMProvider = LLMProvider.openai
-    llm_model: str = "gpt-4o"
+    llm_provider: LLMProvider = LLMProvider.google
+    llm_model: str = "gemini-2.5-flash"
     llm_custom_endpoint: str | None = None
     system_prompt: str | None = None
     first_message: str | None = None
@@ -59,6 +60,20 @@ class AgentCreate(BaseModel):
     voice_config: VoiceConfigCreate
     conversation_config: ConversationConfigCreate = Field(default_factory=ConversationConfigCreate)
     tools: list[AgentToolCreate] = []
+
+    @field_validator("system_prompt")
+    @classmethod
+    def validate_system_prompt(cls, v: str | None) -> str | None:
+        if v is None:
+            return v
+        return validate_system_prompt_text(v, field_name="system_prompt")
+
+    @field_validator("first_message")
+    @classmethod
+    def validate_first_message(cls, v: str | None) -> str | None:
+        if v is None:
+            return v
+        return validate_first_message_text(v, field_name="first_message")
 
 class AgentUpdate(BaseModel):
     name: str | None = None
@@ -69,6 +84,20 @@ class AgentUpdate(BaseModel):
     first_message: str | None = None
     temperature: float | None = None
     max_tokens: int | None = None
+
+    @field_validator("system_prompt")
+    @classmethod
+    def validate_system_prompt(cls, v: str | None) -> str | None:
+        if v is None:
+            return v
+        return validate_system_prompt_text(v, field_name="system_prompt")
+
+    @field_validator("first_message")
+    @classmethod
+    def validate_first_message(cls, v: str | None) -> str | None:
+        if v is None:
+            return v
+        return validate_first_message_text(v, field_name="first_message")
 
 class AgentResponse(BaseModel):
     id: UUID

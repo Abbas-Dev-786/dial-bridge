@@ -21,9 +21,9 @@ class Agent(AppBase):
     )
     
     llm_provider: Mapped[LLMProvider] = mapped_column(
-        SAEnum(LLMProvider, name="llm_provider"), default=LLMProvider.openai
+        SAEnum(LLMProvider, name="llm_provider"), default=LLMProvider.google
     )
-    llm_model: Mapped[str] = mapped_column(String, default="gpt-4o")
+    llm_model: Mapped[str] = mapped_column(String, default="gemini-2.5-flash")
     llm_custom_endpoint: Mapped[str | None] = mapped_column(String)
     
     system_prompt: Mapped[str | None] = mapped_column(String)

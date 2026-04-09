@@ -1,18 +1,16 @@
 import hmac
 import hashlib
-import json
 import logging
 from datetime import datetime, timedelta
-from typing import Dict, Any, Optional
+from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, update
+from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
 from app.models.call import Call, CallTranscript
-from app.models.contact import Contact
-from app.models.campaign import Campaign
 from app.enums import CallStatus, ContactStatus, TranscriptSpeaker
 from app.background.outgoing_webhooks import enqueue_webhook_delivery
+from app.utils.dynamic_variables import build_dynamic_variables
 
 logger = logging.getLogger(__name__)
 
@@ -78,20 +76,44 @@ async def handle_initiation_webhook(db: AsyncSession, payload: dict) -> dict:
     result = await db.execute(stmt)
     call = result.scalar_one_or_none()
 
+    response_data: dict[str, Any] = {}
     if call:
+        contact = call.contact
+        campaign = call.campaign
         if call.status not in TERMINAL_CALL_STATUSES:
             call.status = CallStatus.in_progress
             if not call.answered_at:
                 call.answered_at = datetime.utcnow()
             
-            if call.contact:
-                call.contact.status = ContactStatus.calling
+            if contact:
+                contact.status = ContactStatus.calling
+
+        if campaign:
+            dynamic_vars, dynamic_stats = build_dynamic_variables(
+                contact_name=contact.full_name if contact else "there",
+                contact_phone=contact.phone if contact else call.to_number,
+                contact_company=contact.company if contact else "",
+                campaign_name=campaign.name,
+                custom_fields=contact.custom_fields if contact else None,
+            )
+            response_data = {"dynamic_variables": dynamic_vars}
+            logger.info(
+                "Prepared dynamic variables for initiation webhook "
+                "conversation_id=%s total_keys=%s custom_seen=%s custom_added=%s "
+                "dropped_invalid_key=%s dropped_collision=%s dropped_limit=%s",
+                conversation_id,
+                len(dynamic_vars),
+                dynamic_stats["custom_seen"],
+                dynamic_stats["custom_added"],
+                dynamic_stats["dropped_invalid_key"],
+                dynamic_stats["dropped_collision"],
+                dynamic_stats["dropped_limit"],
+            )
         
         await db.commit()
     
-    # Return 200 with optional overrides if needed
-    # For now, we return empty dict to use default config passed during initiation
-    return {}
+    # Return dynamic variables when available, otherwise use the defaults from initiation.
+    return response_data
 
 async def handle_post_call_transcription(db: AsyncSession, data: dict) -> None:
     """

@@ -1,4 +1,3 @@
-import asyncio
 import logging
 from uuid import UUID
 from datetime import datetime, timedelta
@@ -17,10 +16,9 @@ from app.enums import (
     CampaignStatus, 
     ContactStatus, 
     CallStatus, 
-    CallDirection,
-    KBSyncStatus
+    CallDirection
 )
-from app.services.elevenlabs_client import get_elevenlabs_client
+from app.utils.dynamic_variables import build_dynamic_variables
 
 logger = logging.getLogger(__name__)
 
@@ -171,15 +169,26 @@ async def dispatch_call(self, campaign_id: str, contact_id: str):
                 await db.commit()
             return
 
-        # Build dynamic variables
-        dynamic_vars = {
-            "contact_name": contact.full_name or "there",
-            "contact_phone": contact.phone,
-            "contact_company": contact.company or "",
-            "campaign_name": campaign.name,
-        }
-        if contact.custom_fields:
-            dynamic_vars.update({f"custom_{k}": str(v) for k, v in contact.custom_fields.items()})
+        dynamic_vars, dynamic_stats = build_dynamic_variables(
+            contact_name=contact.full_name,
+            contact_phone=contact.phone,
+            contact_company=contact.company,
+            campaign_name=campaign.name,
+            custom_fields=contact.custom_fields,
+        )
+        logger.info(
+            "Prepared dynamic variables for outbound call "
+            "campaign_id=%s contact_id=%s total_keys=%s custom_seen=%s "
+            "custom_added=%s dropped_invalid_key=%s dropped_collision=%s dropped_limit=%s",
+            campaign.id,
+            contact.id,
+            len(dynamic_vars),
+            dynamic_stats["custom_seen"],
+            dynamic_stats["custom_added"],
+            dynamic_stats["dropped_invalid_key"],
+            dynamic_stats["dropped_collision"],
+            dynamic_stats["dropped_limit"],
+        )
 
         # Initiate ElevenLabs call
         try:

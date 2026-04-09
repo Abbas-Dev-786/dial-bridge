@@ -32,7 +32,7 @@ def mock_generated_config():
     return GeneratedAgentConfig(
         agent_name="Generated Agent",
         system_prompt="You are a professional voice assistant. Be helpful.",
-        first_message="Hello, how can I help you today?",
+        first_message="Hello {{contact_name}}, how can I help you today?",
         voice_id="EXAVITQu4vr4xnSDxMaL",
         tools=["end_call"],
         rationale="Test rationale"

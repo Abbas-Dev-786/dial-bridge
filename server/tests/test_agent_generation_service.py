@@ -1,5 +1,7 @@
 # tests/test_agent_generation_service.py
 
+import json
+
 import pytest
 from app.services.agent_generation_service import (
     _parse_and_validate,
@@ -34,10 +36,23 @@ RESPONSE_INVALID_VOICE = VALID_LLM_RESPONSE.replace(
     '"EXAVITQu4vr4xnSDxMaL"', '"non_existent_voice_id_xyz"'
 )
 # For short prompt test, we need valid JSON but with a short string.
-import json
 _data = json.loads(VALID_LLM_RESPONSE)
 _data["system_prompt"] = "Hi"
 RESPONSE_SHORT_PROMPT = json.dumps(_data)
+
+_missing_contact_name = json.loads(VALID_LLM_RESPONSE)
+_missing_contact_name["first_message"] = "Hello there, great to connect with you today."
+RESPONSE_MISSING_CONTACT_NAME = json.dumps(_missing_contact_name)
+
+_unknown_placeholder = json.loads(VALID_LLM_RESPONSE)
+_unknown_placeholder["first_message"] = (
+    "Hi {{contact_name}}, I saw your account id {{account_id}} and wanted to follow up."
+)
+RESPONSE_UNKNOWN_PLACEHOLDER = json.dumps(_unknown_placeholder)
+
+_malformed_placeholder = json.loads(VALID_LLM_RESPONSE)
+_malformed_placeholder["first_message"] = "Hi {{contact-name}}, thanks for your time today."
+RESPONSE_MALFORMED_PLACEHOLDER = json.dumps(_malformed_placeholder)
 
 class TestParseAndValidate:
     def test_valid_response(self):
@@ -69,6 +84,21 @@ class TestParseAndValidate:
         from pydantic import ValidationError
         with pytest.raises(ValidationError):
             _parse_and_validate(bad)
+
+    def test_missing_contact_name_placeholder_raises(self):
+        from pydantic import ValidationError
+        with pytest.raises(ValidationError):
+            _parse_and_validate(RESPONSE_MISSING_CONTACT_NAME)
+
+    def test_unknown_placeholder_raises(self):
+        from pydantic import ValidationError
+        with pytest.raises(ValidationError):
+            _parse_and_validate(RESPONSE_UNKNOWN_PLACEHOLDER)
+
+    def test_malformed_placeholder_raises(self):
+        from pydantic import ValidationError
+        with pytest.raises(ValidationError):
+            _parse_and_validate(RESPONSE_MALFORMED_PLACEHOLDER)
 
 
 class TestBuildAgentCreate:

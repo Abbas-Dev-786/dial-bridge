@@ -1,4 +1,5 @@
 export const LLM_MODELS = [
+  { id: "gemini-2.5-flash", name: "Gemini 2.5 Flash" },
   { id: "gpt-4o", name: "GPT-4o" },
   { id: "gpt-4o-mini", name: "GPT-4o Mini" },
   { id: "claude-3.5-sonnet", name: "Claude 3.5 Sonnet" },

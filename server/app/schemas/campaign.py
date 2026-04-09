@@ -61,6 +61,19 @@ class CampaignUpdate(BaseModel):
 class CampaignAssignPhoneNumber(BaseModel):
     phone_number_id: UUID
 
+class CampaignGoalImproveRequest(BaseModel):
+    goal_description: str = Field(
+        ...,
+        min_length=10,
+        max_length=500,
+        description="Goal text to improve before campaign creation.",
+    )
+
+class CampaignGoalImproveResponse(BaseModel):
+    improved_goal_description: str
+    was_improved: bool
+    warning: str | None = None
+
 class AgentGenerationPreview(BaseModel):
     """
     Returned inside CampaignResponse to show the user what was generated.

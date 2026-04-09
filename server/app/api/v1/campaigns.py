@@ -13,7 +13,9 @@ from app.schemas.campaign import (
     CampaignResponse, 
     CampaignListItem,
     CampaignAssignPhoneNumber,
-    CampaignStatusTransition
+    CampaignStatusTransition,
+    CampaignGoalImproveRequest,
+    CampaignGoalImproveResponse,
 )
 from app.exceptions import ConflictError, ValidationError
 from app.services import campaign_service
@@ -56,8 +58,31 @@ async def create_campaign(
     
     duration_ms = int((time.time() - start_time) * 1000)
     response.headers["X-Generation-Time-Ms"] = str(duration_ms)
-    
+
     return campaign_service.build_campaign_response(campaign)
+
+@router.post("/{workspace_id}/campaigns/improve-goal", response_model=CampaignGoalImproveResponse)
+async def improve_campaign_goal(
+    workspace_id: uuid.UUID,
+    data: CampaignGoalImproveRequest,
+    db: AsyncSession = Depends(get_db),
+    member: WorkspaceMember = Depends(require_role(WorkspaceRole.editor, WorkspaceRole.admin, WorkspaceRole.owner)),
+):
+    """Improves a campaign goal draft before creating or regenerating an agent."""
+    result = await db.execute(select(Workspace).where(Workspace.id == workspace_id))
+    workspace = result.scalar_one()
+
+    from app.services.agent_generation_service import improve_goal_description
+
+    improved_goal, was_improved, warning = await improve_goal_description(
+        goal=data.goal_description,
+        workspace_name=workspace.name,
+    )
+    return CampaignGoalImproveResponse(
+        improved_goal_description=improved_goal,
+        was_improved=was_improved,
+        warning=warning,
+    )
 
 @router.get("/{workspace_id}/campaigns/{campaign_id}", response_model=CampaignResponse)
 async def get_campaign(

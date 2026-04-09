@@ -56,11 +56,15 @@ def extract_and_validate_placeholders(text: str, field_name: str) -> set[str]:
     return placeholders
 
 
-def _validate_plain_voice_text(text: str, field_name: str) -> str:
+def _normalize_text(text: str, field_name: str) -> str:
     cleaned = text.strip()
     if not cleaned:
         raise ValueError(f"{field_name} cannot be empty.")
+    return cleaned
 
+
+def _validate_plain_voice_text(text: str, field_name: str) -> str:
+    cleaned = _normalize_text(text, field_name)
     for pattern, description in MARKDOWN_PATTERNS:
         if pattern.search(cleaned):
             raise ValueError(
@@ -71,9 +75,11 @@ def _validate_plain_voice_text(text: str, field_name: str) -> str:
 
 
 def validate_system_prompt_text(text: str, field_name: str = "system_prompt") -> str:
-    cleaned = _validate_plain_voice_text(text, field_name)
+    cleaned = _normalize_text(text, field_name)
     if len(cleaned) < 50:
         raise ValueError(f"{field_name} must be at least 50 characters.")
+    if "```" in cleaned:
+        raise ValueError(f"{field_name} must not include markdown code fences.")
     extract_and_validate_placeholders(cleaned, field_name)
     return cleaned
 

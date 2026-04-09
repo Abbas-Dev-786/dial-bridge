@@ -28,14 +28,26 @@ def test_agent_create_rejects_unknown_placeholder_in_first_message():
         )
 
 
-def test_agent_create_rejects_markdown_in_system_prompt():
+def test_agent_create_allows_structured_markdown_system_prompt():
+    prompt = _build_agent_create(
+        system_prompt=(
+            "# Personality\n"
+            "You are polite and concise.\n\n"
+            "# Guardrails\n"
+            "Never guess and never fabricate results."
+        )
+    )
+    assert "# Guardrails" in (prompt.system_prompt or "")
+
+
+def test_agent_create_rejects_code_fences_in_system_prompt():
     with pytest.raises(ValidationError):
         _build_agent_create(
             system_prompt=(
-                "# Call Policy\n"
-                "- Greet the prospect\n"
-                "- Ask qualifying questions\n"
-                "- End politely"
+                "```md\n"
+                "# Personality\n"
+                "You are polite and concise.\n"
+                "```"
             )
         )
 

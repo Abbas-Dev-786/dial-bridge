@@ -5,9 +5,11 @@ import json
 import pytest
 from app.services.agent_generation_service import (
     _parse_and_validate,
+    _parse_goal_improvement,
     build_agent_create,
     DEFAULT_CONFIG,
     GeneratedAgentConfig,
+    improve_goal_description,
 )
 
 VALID_LLM_RESPONSE = """
@@ -54,6 +56,24 @@ _malformed_placeholder = json.loads(VALID_LLM_RESPONSE)
 _malformed_placeholder["first_message"] = "Hi {{contact-name}}, thanks for your time today."
 RESPONSE_MALFORMED_PLACEHOLDER = json.dumps(_malformed_placeholder)
 
+_sectioned_prompt = json.loads(VALID_LLM_RESPONSE)
+_sectioned_prompt["system_prompt"] = (
+    "# Personality\n"
+    "You are a friendly outbound specialist.\n\n"
+    "# Goal\n"
+    "Qualify interest and propose a demo.\n\n"
+    "# Guardrails\n"
+    "Never guess or fabricate information."
+)
+RESPONSE_SECTIONED_PROMPT = json.dumps(_sectioned_prompt)
+
+VALID_GOAL_IMPROVEMENT_RESPONSE = json.dumps({
+    "improved_goal_description": (
+        "Call recently signed-up trial users who have not booked a demo yet, "
+        "identify interest, and convert qualified prospects into a scheduled 15-minute product walkthrough."
+    )
+})
+
 class TestParseAndValidate:
     def test_valid_response(self):
         config = _parse_and_validate(VALID_LLM_RESPONSE)
@@ -67,6 +87,10 @@ class TestParseAndValidate:
     def test_strips_markdown_fences(self):
         config = _parse_and_validate(RESPONSE_WITH_MARKDOWN)
         assert config.agent_name == "Demo Booking Agent"
+
+    def test_sectioned_system_prompt_is_allowed(self):
+        config = _parse_and_validate(RESPONSE_SECTIONED_PROMPT)
+        assert "# Guardrails" in config.system_prompt
 
     def test_invalid_voice_id_falls_back_to_sarah(self):
         config = _parse_and_validate(RESPONSE_INVALID_VOICE)
@@ -167,3 +191,36 @@ class TestGenerateAgentConfig:
         config, was_generated = await generate_agent_config("Book demos", "Acme")
         assert was_generated is True
         assert config.agent_name == "Demo Booking Agent"
+
+
+class TestImproveGoalDescription:
+    def test_parse_goal_improvement_response(self):
+        improved = _parse_goal_improvement(VALID_GOAL_IMPROVEMENT_RESPONSE)
+        assert "trial users" in improved
+        assert len(improved) <= 500
+
+    @pytest.mark.asyncio
+    async def test_improve_goal_returns_original_when_no_api_key(self, monkeypatch):
+        monkeypatch.setattr("app.services.agent_generation_service.groq_client", None)
+        improved, was_improved, warning = await improve_goal_description("Book more demos quickly.", "Acme")
+        assert improved == "Book more demos quickly."
+        assert was_improved is False
+        assert warning is not None
+
+    @pytest.mark.asyncio
+    async def test_improve_goal_returns_ai_output_on_success(self, monkeypatch):
+        async def mock_call(*args, **kwargs):
+            return VALID_GOAL_IMPROVEMENT_RESPONSE
+
+        monkeypatch.setattr(
+            "app.services.agent_generation_service._call_goal_improvement_llm", mock_call
+        )
+        monkeypatch.setattr("app.services.agent_generation_service.groq_client", "fake-client")
+
+        improved, was_improved, warning = await improve_goal_description(
+            "Call customers.",
+            "Acme",
+        )
+        assert "trial users" in improved
+        assert was_improved is True
+        assert warning is None

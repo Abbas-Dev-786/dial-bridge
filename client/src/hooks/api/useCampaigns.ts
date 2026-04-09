@@ -4,6 +4,12 @@ import { useWorkspaceStore } from "@/store/useWorkspaceStore";
 
 export type CampaignStatus = "draft" | "scheduled" | "live" | "paused" | "completed" | "archived";
 
+export interface ImproveGoalResponse {
+  improved_goal_description: string;
+  was_improved: boolean;
+  warning: string | null;
+}
+
 export interface CampaignSummary {
   id: string;
   name: string;
@@ -195,6 +201,15 @@ export function useCampaignMutations(campaignId?: string) {
     onSuccess: invalidateCampaign,
   });
 
+  const improveGoal = useMutation({
+    mutationFn: async (goal_description: string) => {
+      const response = await workspaceRequest.post<ImproveGoalResponse>("/campaigns/improve-goal", {
+        goal_description,
+      });
+      return response.data;
+    },
+  });
+
   const updateCampaign = useMutation({
     mutationFn: async (data: any) => {
       const response = await workspaceRequest.patch(`/campaigns/${campaignId}`, data);
@@ -325,6 +340,7 @@ export function useCampaignMutations(campaignId?: string) {
 
   return {
     createCampaign,
+    improveGoal,
     updateCampaign,
     transitionStatus,
     regenerateAgent,

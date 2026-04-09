@@ -104,6 +104,57 @@ async def test_transition_to_live_validations(mock_workspace):
         await campaign_service.transition_status(mock_db, campaign, CampaignStatus.live, mock_workspace)
     assert "An agent must be assigned before going live" in str(exc.value)
 
+
+@pytest.mark.asyncio
+async def test_transition_to_live_starts_feeder_and_keeps_injection_path(mock_workspace):
+    campaign = Campaign(
+        id=uuid.uuid4(),
+        workspace_id=mock_workspace.id,
+        name="Live Campaign",
+        status=CampaignStatus.draft,
+        agent_id=uuid.uuid4(),
+        phone_number_id=uuid.uuid4(),
+        contacts_total=3,
+        kb_sync_status=KBSyncStatus.synced,
+    )
+
+    mock_db = AsyncMock(spec=AsyncSession)
+
+    agent = SimpleNamespace(name="Generated Agent", elevenlabs_agent_id="el-agent-1")
+    blocking_campaign = None
+    phone = SimpleNamespace(elevenlabs_number_id="el-number-1")
+
+    result_agent = MagicMock()
+    result_agent.scalar_one_or_none.return_value = agent
+    result_blocking = MagicMock()
+    result_blocking.scalar_one_or_none.return_value = blocking_campaign
+    result_phone = MagicMock()
+    result_phone.scalar_one_or_none.return_value = phone
+    mock_db.execute.side_effect = [result_agent, result_blocking, result_phone]
+
+    mock_client = MagicMock()
+    mock_client.assign_phone_to_agent = AsyncMock()
+    mock_context_manager = MagicMock()
+    mock_context_manager.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_context_manager.__aexit__ = AsyncMock(return_value=None)
+
+    with patch("app.services.elevenlabs_client.ElevenLabsClient", return_value=mock_context_manager):
+        with patch("app.background.dialer.feed_campaign_contacts.delay") as mock_feed_delay:
+            with patch("app.services.campaign_service.log_action", new_callable=AsyncMock):
+                with patch("app.services.campaign_service.get_campaign", new_callable=AsyncMock) as mock_get_campaign:
+                    mock_feed_delay.return_value = SimpleNamespace(id="feeder-task-1")
+                    mock_get_campaign.return_value = campaign
+
+                    result = await campaign_service.transition_status(
+                        mock_db, campaign, CampaignStatus.live, mock_workspace
+                    )
+
+    assert result.status == CampaignStatus.live
+    assert campaign.feeder_task_id == "feeder-task-1"
+    mock_client.assign_phone_to_agent.assert_awaited_once_with("el-number-1", "el-agent-1")
+    mock_feed_delay.assert_called_once_with(str(campaign.id))
+    mock_db.commit.assert_awaited()
+
 @pytest.mark.asyncio
 async def test_build_campaign_response(mock_workspace):
     """Test manual response builder for the API."""

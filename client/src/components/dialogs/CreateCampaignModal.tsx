@@ -35,7 +35,7 @@ const campaignSchema = z.object({
     .max(80, "Campaign name cannot exceed 80 characters"),
   goal_description: z.string()
     .min(10, "Goal description must be at least 10 characters")
-    .max(2000, "Goal description cannot exceed 2000 characters"),
+    .max(500, "Goal description cannot exceed 500 characters"),
   // Optional settings
   max_retries: z.number().int().min(0).max(10).default(3),
   dnc_check_enabled: z.boolean().default(true),
@@ -63,14 +63,21 @@ interface AgentGenerationPreview {
   fallback_warning: string | null;
 }
 
+interface ImproveGoalResponse {
+  improved_goal_description: string;
+  was_improved: boolean;
+  warning: string | null;
+}
+
 export function CreateCampaignModal({ open, onOpenChange }: CreateCampaignModalProps) {
   const navigate = useNavigate();
   const { toast } = useToast();
   const [showOptional, setShowOptional] = useState(false);
   const [generationResult, setGenerationResult] = useState<AgentGenerationPreview | null>(null);
 
-  const { createCampaign } = useCampaignMutations();
+  const { createCampaign, improveGoal } = useCampaignMutations();
   const isGenerating = createCampaign.isPending;
+  const isImprovingGoal = improveGoal.isPending;
 
   const form = useForm<CampaignFormValues>({
     resolver: zodResolver(campaignSchema),
@@ -114,6 +121,50 @@ export function CreateCampaignModal({ open, onOpenChange }: CreateCampaignModalP
         });
       }
     });
+  };
+
+  const handleImproveGoal = async () => {
+    const currentGoal = form.getValues("goal_description").trim();
+    if (currentGoal.length < 10) {
+      toast({
+        variant: "destructive",
+        title: "Goal is too short",
+        description: "Please write at least 10 characters before improving.",
+      });
+      return;
+    }
+
+    if (currentGoal.length > 500) {
+      toast({
+        variant: "destructive",
+        title: "Goal is too long",
+        description: "Please keep your goal within 500 characters before improving.",
+      });
+      return;
+    }
+
+    try {
+      const response = await improveGoal.mutateAsync(currentGoal) as ImproveGoalResponse;
+      form.setValue("goal_description", response.improved_goal_description, {
+        shouldValidate: true,
+        shouldDirty: true,
+      });
+
+      toast({
+        title: response.was_improved ? "Goal Improved" : "Goal Checked",
+        description:
+          response.warning ||
+          (response.was_improved
+            ? "Your goal has been rewritten to be clearer and more actionable."
+            : "Your goal already looks strong. No major rewrite was needed."),
+      });
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "Could not improve goal",
+        description: error.response?.data?.detail || "Please try again in a moment.",
+      });
+    }
   };
 
   const handleFinish = () => {
@@ -257,7 +308,29 @@ export function CreateCampaignModal({ open, onOpenChange }: CreateCampaignModalP
                 name="goal_description"
                 render={({ field }) => (
                   <FormItem className="space-y-2">
-                    <FormLabel>Campaign Goal <span className="text-destructive">*</span></FormLabel>
+                    <div className="flex items-center justify-between gap-2">
+                      <FormLabel>Campaign Goal <span className="text-destructive">*</span></FormLabel>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-8 gap-1.5 shrink-0"
+                        onClick={handleImproveGoal}
+                        disabled={isGenerating || isImprovingGoal || goalValue.trim().length < 10}
+                      >
+                        {isImprovingGoal ? (
+                          <>
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            Improving...
+                          </>
+                        ) : (
+                          <>
+                            <Sparkles className="h-3.5 w-3.5" />
+                            Improve
+                          </>
+                        )}
+                      </Button>
+                    </div>
                     <FormControl>
                       <Textarea
                         placeholder="e.g. Reach out to trial users who haven't booked a demo yet and schedule a 15-min product walkthrough"
@@ -269,7 +342,7 @@ export function CreateCampaignModal({ open, onOpenChange }: CreateCampaignModalP
                       <FormDescription className="text-xs leading-tight">
                         Describe what this campaign should achieve. AI uses this to generate your agent's personality and script.
                       </FormDescription>
-                      <p className="text-xs text-muted-foreground shrink-0 ml-2">{goalValue.length}/2000</p>
+                      <p className="text-xs text-muted-foreground shrink-0 ml-2">{goalValue.length}/500</p>
                     </div>
                     <FormMessage />
                   </FormItem>
@@ -402,10 +475,10 @@ export function CreateCampaignModal({ open, onOpenChange }: CreateCampaignModalP
               </Collapsible>
 
               <DialogFooter className="flex gap-2 pt-2 sm:justify-end">
-                <Button variant="ghost" type="button" onClick={() => onOpenChange(false)} disabled={isGenerating}>
+                <Button variant="ghost" type="button" onClick={() => onOpenChange(false)} disabled={isGenerating || isImprovingGoal}>
                   Cancel
                 </Button>
-                <Button type="submit" disabled={isGenerating} className="min-w-[140px] gap-2">
+                <Button type="submit" disabled={isGenerating || isImprovingGoal} className="min-w-[140px] gap-2">
                   Generate AI Agent
                   <Sparkles className="h-4 w-4" />
                 </Button>

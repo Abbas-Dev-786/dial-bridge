@@ -3,17 +3,15 @@ import hashlib
 import json
 import logging
 from datetime import datetime, timedelta
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.orm import selectinload
-from app.models.call import Call, CallTranscript, CallEvaluation, CallCollectedData
+
+from app.models.call import Call, CallTranscript
 from app.models.contact import Contact
 from app.models.campaign import Campaign
-from app.models.agent import Agent
-from app.models.phone_number import PhoneNumber
 from app.enums import CallStatus, ContactStatus, TranscriptSpeaker
-from app.models.workspace import Workspace
 from app.background.outgoing_webhooks import enqueue_webhook_delivery
 
 logger = logging.getLogger(__name__)
@@ -41,21 +39,20 @@ def verify_elevenlabs_signature(request_body: bytes, signature_header: str, secr
     
     return hmac.compare_digest(expected_signature, signature_header)
 
-async def handle_elevenlabs_event(db: AsyncSession, event_type: str, payload: dict) -> None:
-    """Main dispatcher for ElevenLabs webhook events."""
+async def handle_elevenlabs_event(db: AsyncSession, payload: dict) -> None:
+    """Main dispatcher for ElevenLabs webhook events (Post-call)."""
+    event_type = payload.get("type")
+    
     handlers = {
-        "elevenlabs.call.initiated": handle_call_initiated,
-        "elevenlabs.call.answered": handle_call_answered,
-        "elevenlabs.call.ended": handle_call_ended,
-        "elevenlabs.conversation.transcript": handle_transcript,
-        "elevenlabs.conversation.summary": handle_summary,
-        "elevenlabs.call.failed": handle_call_failed,
+        "post_call_transcription": handle_post_call_transcription,
+        "post_call_audio": handle_post_call_audio,
+        "post_call_initiation_failure": handle_post_call_initiation_failure,
     }
     
     handler = handlers.get(event_type)
     if handler:
         try:
-            await handler(db, payload)
+            await handler(db, payload.get("data", {}))
             await db.commit()
         except Exception as e:
             await db.rollback()
@@ -64,9 +61,44 @@ async def handle_elevenlabs_event(db: AsyncSession, event_type: str, payload: di
     else:
         logger.warning(f"No handler for event type: {event_type}")
 
-async def handle_call_initiated(db: AsyncSession, payload: dict) -> None:
+async def handle_initiation_webhook(db: AsyncSession, payload: dict) -> dict:
+    """
+    Handles the 'Conversation Initiation Webhook'.
+    Fires when a conversation starts (closest to 'Call Answered').
+    Returns provisioning data (dynamic variables).
+    """
     conversation_id = payload.get("conversation_id")
-    # Using fetch for later use
+    logger.info(f"Initiation webhook received for conversation: {conversation_id}")
+
+    stmt = (
+        select(Call)
+        .where(Call.elevenlabs_conversation_id == conversation_id)
+        .options(selectinload(Call.contact), selectinload(Call.campaign))
+    )
+    result = await db.execute(stmt)
+    call = result.scalar_one_or_none()
+
+    if call:
+        if call.status not in TERMINAL_CALL_STATUSES:
+            call.status = CallStatus.in_progress
+            if not call.answered_at:
+                call.answered_at = datetime.utcnow()
+            
+            if call.contact:
+                call.contact.status = ContactStatus.calling
+        
+        await db.commit()
+    
+    # Return 200 with optional overrides if needed
+    # For now, we return empty dict to use default config passed during initiation
+    return {}
+
+async def handle_post_call_transcription(db: AsyncSession, data: dict) -> None:
+    """
+    Processes the 'post_call_transcription' event.
+    This is the primary source of truth for call results.
+    """
+    conversation_id = data.get("conversation_id")
     stmt = (
         select(Call)
         .where(Call.elevenlabs_conversation_id == conversation_id)
@@ -76,172 +108,113 @@ async def handle_call_initiated(db: AsyncSession, payload: dict) -> None:
     call = result.scalar_one_or_none()
     
     if not call:
-        logger.warning(f"Call not found for conversation_id: {conversation_id}. Creating minimal record.")
-        # Minimal record creation if needed - though usually dialer creates it
-        # This part might need workspace_id which we should try to extract from payload if available
+        logger.error(f"Call with conversation_id {conversation_id} not found in post_call_transcription")
         return
 
-    call.status = CallStatus.ringing
-    call.started_at = datetime.fromtimestamp(payload.get("timestamp")) if payload.get("timestamp") else datetime.now()
-    call.raw_provider_payload = payload
-
-async def handle_call_answered(db: AsyncSession, payload: dict) -> None:
-    conversation_id = payload.get("conversation_id")
-    stmt = (
-        select(Call)
-        .where(Call.elevenlabs_conversation_id == conversation_id)
-        .options(selectinload(Call.contact), selectinload(Call.campaign))
-    )
-    result = await db.execute(stmt)
-    call = result.scalar_one_or_none()
+    # 1. Update Core Metadata
+    metadata = data.get("metadata", {})
+    analysis = data.get("analysis", {})
     
-    if not call:
-        return
-    if call.status in TERMINAL_CALL_STATUSES:
-        return
-
-    call.status = CallStatus.in_progress
-    call.answered_at = datetime.fromtimestamp(payload.get("timestamp")) if payload.get("timestamp") else datetime.now()
+    call.duration_seconds = metadata.get("call_duration_secs")
+    call.started_at = datetime.fromtimestamp(metadata.get("start_time_unix_secs")) if metadata.get("start_time_unix_secs") else call.started_at
+    call.ended_at = datetime.utcnow()
     
-    if call.contact:
-        call.contact.status = ContactStatus.calling
-        call.contact.last_called_at = datetime.now()
-
-async def handle_call_ended(db: AsyncSession, payload: dict) -> None:
-    conversation_id = payload.get("conversation_id")
-    stmt = (
-        select(Call)
-        .where(Call.elevenlabs_conversation_id == conversation_id)
-        .options(selectinload(Call.contact), selectinload(Call.campaign))
-    )
-    result = await db.execute(stmt)
-    call = result.scalar_one_or_none()
-    
-    if not call:
-        logger.error(f"Call with conversation_id {conversation_id} not found during call.ended")
-        return
-    if call.status in TERMINAL_CALL_STATUSES:
-        return
-
-    outcome = payload.get("call_outcome", "completed") # outcome field mapping might vary
-    # Assuming mapping outcome to CallStatus
-    status_map = {
-        "completed": CallStatus.completed,
-        "voicemail": CallStatus.voicemail,
-        "transferred": CallStatus.transferred,
-        "busy": CallStatus.busy,
-        "no_answer": CallStatus.no_answer,
-    }
-    call.status = status_map.get(outcome, CallStatus.completed)
-    call.ended_at = datetime.now()
-    call.duration_seconds = payload.get("duration_seconds")
-    call.recording_url = payload.get("recording_url")
+    # Outcome and Success
+    outcome = analysis.get("call_successful") # 'success' or 'failure'
     call.outcome = outcome
-    call.is_voicemail = payload.get("is_voicemail", False)
-    call.was_transferred = payload.get("was_transferred", False)
-    call.transfer_destination = payload.get("transfer_destination")
+    call.summary = analysis.get("transcript_summary")
     
-    # Costs
-    costs = payload.get("cost_breakdown", {})
-    call.cost_telephony_cents = int(costs.get("telephony", 0) * 100)
-    call.cost_llm_cents = int(costs.get("llm", 0) * 100)
-    call.cost_tts_cents = int(costs.get("tts", 0) * 100)
-    call.cost_stt_cents = int(costs.get("stt", 0) * 100)
-    
-    # Latency
-    latency = payload.get("latency_stats", {}) # Mapping might differ
-    call.latency_p50_ms = latency.get("p50")
-    call.latency_p95_ms = latency.get("p95")
-    call.latency_p99_ms = latency.get("p99")
-    
-    call.raw_provider_payload = payload
+    # Billing
+    cost_raw = metadata.get("cost", 0) # usually in cents or fractional cents? Docs say 296 = 2.96? 
+    # Let's assume cost is in millicents or something, but our DB uses cents.
+    # Actually, ElevenLabs cost field in transcript payload is usually in cents * 10 or similar.
+    # Let's store as provided for now or refine if we know the scale.
+    call.cost_telephony_cents = cost_raw 
 
-    contact = call.contact
-    campaign = call.campaign
-    retryable_outcome = False
-
-    if contact and campaign:
-        retryable_outcome = (
-            outcome in (campaign.retry_on_outcomes or [])
-            and (contact.retry_count or 0) < campaign.max_retries
-        )
-
-    if contact:
-        contact.last_called_at = datetime.now()
-        contact.last_outcome = outcome
-
-        if retryable_outcome and campaign:
-            contact.retry_count = (contact.retry_count or 0) + 1
-            contact.status = ContactStatus.pending
-            contact.next_retry_at = datetime.now() + timedelta(minutes=campaign.retry_delay_minutes)
+    # 2. Update Status
+    if outcome == "success":
+        call.status = CallStatus.completed
+    else:
+        # Check termination reason if possible
+        reason = metadata.get("termination_reason", "").lower()
+        if "no answer" in reason or "no-answer" in reason:
+            call.status = CallStatus.no_answer
+        elif "busy" in reason:
+            call.status = CallStatus.busy
+        elif "voicemail" in reason:
+            call.status = CallStatus.voicemail
         else:
-            contact.status = ContactStatus.called
-            contact.next_retry_at = None
+            call.status = CallStatus.completed # Even if 'failure' analysis, the call technically 'completed'
 
-    if campaign:
-        campaign.total_spend_cents += _call_total_cost(call)
-        if call.status == CallStatus.completed:
-            campaign.calls_successful += 1
-        if not retryable_outcome:
-            campaign.contacts_called += 1
-            campaign.contacts_remaining = max(0, campaign.contacts_remaining - 1)
-
-    # Update PhoneNumber stats
-    if call.phone_number_id:
-        # Assuming calls_made field exists on PhoneNumber
-        pass
-
-    # Update Agent stats
-    if call.agent_id:
-        # Assuming total_calls field exists on Agent
-        pass
-
-
-async def handle_transcript(db: AsyncSession, payload: dict) -> None:
-    conversation_id = payload.get("conversation_id")
-    stmt = select(Call).where(Call.elevenlabs_conversation_id == conversation_id)
-    result = await db.execute(stmt)
-    call = result.scalar_one_or_none()
+    # 3. Save Transcript
+    transcript_data = data.get("transcript", [])
+    # Clear any old "ringing" transcripts if they existed
+    # (Though for post-call they shouldn't)
     
-    if not call:
-        return
-
-    transcript_data = payload.get("transcript", [])
     for idx, turn in enumerate(transcript_data):
         speaker_map = {
             "agent": TranscriptSpeaker.agent,
             "user": TranscriptSpeaker.user,
-            "tool": TranscriptSpeaker.tool,
-            "system": TranscriptSpeaker.system
         }
-        
         new_transcript = CallTranscript(
             call_id=call.id,
             sequence=idx + 1,
             speaker=speaker_map.get(turn.get("role"), TranscriptSpeaker.user),
             text=turn.get("message"),
             timestamp_secs=turn.get("time_in_call_secs"),
-            latency_ms=turn.get("latency_ms"),
-            tool_name=turn.get("tool_name"),
-            tool_payload=turn.get("tool_response")
         )
         db.add(new_transcript)
-    
-    await db.flush()
-    # Post-call processing trigger
-    await run_post_call_processing(db, call)
 
-async def handle_summary(db: AsyncSession, payload: dict) -> None:
-    conversation_id = payload.get("conversation_id")
-    stmt = select(Call).where(Call.elevenlabs_conversation_id == conversation_id)
-    result = await db.execute(stmt)
-    call = result.scalar_one_or_none()
+    # 4. Update Campaign & Contact
+    contact = call.contact
+    campaign = call.campaign
     
-    if call:
-        call.summary = payload.get("summary")
+    if contact and campaign:
+        is_successful_outcome = (outcome == "success")
+        should_retry = (
+            not is_successful_outcome
+            and (contact.retry_count or 0) < campaign.max_retries
+        )
 
-async def handle_call_failed(db: AsyncSession, payload: dict) -> None:
-    conversation_id = payload.get("conversation_id")
+        contact.last_called_at = datetime.utcnow()
+        contact.last_outcome = outcome
+
+        if should_retry:
+            contact.retry_count = (contact.retry_count or 0) + 1
+            contact.status = ContactStatus.pending
+            contact.next_retry_at = datetime.utcnow() + timedelta(minutes=campaign.retry_delay_minutes)
+        else:
+            contact.status = ContactStatus.called
+            contact.next_retry_at = None
+
+        # Campaign aggregates
+        campaign.total_spend_cents += (call.cost_telephony_cents or 0)
+        if outcome == "success":
+            campaign.calls_successful += 1
+        else:
+            campaign.calls_failed += 1
+            
+        if not should_retry:
+            campaign.contacts_called += 1
+            campaign.contacts_remaining = max(0, campaign.contacts_remaining - 1)
+
+    # 5. Trigger Outgoing webhooks
+    await enqueue_webhook_delivery(db, call, "call.completed")
+
+async def handle_post_call_audio(db: AsyncSession, data: dict) -> None:
+    """
+    Processes the 'post_call_audio' event.
+    Useful for local archival, though we prefer the recording_url in metadata.
+    """
+    conversation_id = data.get("conversation_id")
+    # For now, we just log it. We might implement local storage later.
+    logger.info(f"Audio received for conversation: {conversation_id}")
+
+async def handle_post_call_initiation_failure(db: AsyncSession, data: dict) -> None:
+    """
+    Processes the 'post_call_initiation_failure' event.
+    """
+    conversation_id = data.get("conversation_id")
     stmt = (
         select(Call)
         .where(Call.elevenlabs_conversation_id == conversation_id)
@@ -249,64 +222,18 @@ async def handle_call_failed(db: AsyncSession, payload: dict) -> None:
     )
     result = await db.execute(stmt)
     call = result.scalar_one_or_none()
-    
-    if not call:
-        return
-    if call.status in TERMINAL_CALL_STATUSES:
-        return
 
-    call.status = CallStatus.failed
-    call.ended_at = datetime.now()
-    call.error_code = payload.get("error_code")
-    call.error_message = payload.get("error_message")
-    call.raw_provider_payload = payload
-
-    contact = call.contact
-    campaign = call.campaign
-
-    should_retry = bool(
-        contact
-        and campaign
-        and (contact.retry_count or 0) < campaign.max_retries
-    )
-
-    if contact:
-        contact.last_called_at = datetime.now()
-        contact.last_outcome = "failed"
-        contact.retry_count = (contact.retry_count or 0) + 1
-
-        if should_retry and campaign:
-            contact.status = ContactStatus.pending
-            contact.next_retry_at = datetime.now() + timedelta(minutes=campaign.retry_delay_minutes)
-        else:
-            contact.status = ContactStatus.failed
-            contact.next_retry_at = None
-
-    if campaign:
-        campaign.calls_failed += 1
-        if not should_retry:
+    if call:
+        call.status = CallStatus.failed
+        call.error_message = "Initiation failed (unreachable or invalid number)"
+        
+        contact = call.contact
+        campaign = call.campaign
+        if contact and campaign:
+            contact.status = ContactStatus.failed # Or pending if we want to retry connection failures
+            campaign.calls_failed += 1
             campaign.contacts_called += 1
             campaign.contacts_remaining = max(0, campaign.contacts_remaining - 1)
 
-async def run_post_call_processing(db: AsyncSession, call: Call) -> None:
-    """Run summary generation and data extraction."""
-    # 1. AI Summary if missing
-    if not call.summary:
-        # Placeholder for LLM call
-        pass
-
-    # 2. Data collection extract
-    # This would involve querying agent config and extraction values via LLM
-    pass
-
-    # 3. Fire outgoing webhooks
-    await enqueue_webhook_delivery(db, call, "call.completed")
-
-
 def _call_total_cost(call: Call) -> int:
-    return (
-        (call.cost_telephony_cents or 0)
-        + (call.cost_llm_cents or 0)
-        + (call.cost_tts_cents or 0)
-        + (call.cost_stt_cents or 0)
-    )
+    return (call.cost_telephony_cents or 0)

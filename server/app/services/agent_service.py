@@ -61,6 +61,8 @@ def build_elevenlabs_agent_payload(
             "conversation": {
                 "max_duration_seconds": conversation_config.max_duration_seconds,
             },
+            "post_call_webhook_url": f"{settings.base_url}/api/v1/webhooks/elevenlabs/post-call",
+            "conversation_initiation_url": f"{settings.base_url}/api/v1/webhooks/elevenlabs/initiation",
         },
     }
 

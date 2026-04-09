@@ -7,6 +7,7 @@ class Settings(BaseSettings):
     app_env: str = "development"
     app_secret_key: str = "dev-secret-key-change-me"
     debug: bool = False
+    base_url: str = "http://localhost:8000"
 
     database_url: str = "postgresql+asyncpg://dialbridge:password@localhost:5433/dialbridge"
     redis_url: str = "redis://localhost:6379/0"

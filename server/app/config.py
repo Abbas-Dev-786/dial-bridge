@@ -5,17 +5,17 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     app_env: str = "development"
-    app_secret_key: str
+    app_secret_key: str = "dev-secret-key-change-me"
     debug: bool = False
 
-    database_url: str
+    database_url: str = "postgresql+asyncpg://dialbridge:password@localhost:5433/dialbridge"
     redis_url: str = "redis://localhost:6379/0"
 
     jwt_algorithm: str = "HS256"
     access_token_expire_minutes: int = 60
     refresh_token_expire_days: int = 30
 
-    elevenlabs_api_key: str
+    elevenlabs_api_key: str = ""
     elevenlabs_base_url: str = "https://api.elevenlabs.io/v1"
     elevenlabs_webhook_secret: str = ""
     groq_api_key: str = ""

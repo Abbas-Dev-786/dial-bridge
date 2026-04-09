@@ -17,6 +17,28 @@ export function useMembersQuery() {
   });
 }
 
+export function usePendingInvitationsQuery() {
+  const { activeWorkspaceId } = useWorkspaceStore();
+
+  return useQuery({
+    queryKey: ["pending-invitations", activeWorkspaceId],
+    queryFn: async () => {
+      if (!activeWorkspaceId) throw new Error("No active workspace selected");
+      const response = await workspaceRequest.get<
+        {
+          id: string;
+          email: string;
+          role: string;
+          expires_at: string;
+          created_at: string;
+        }[]
+      >("/invitations");
+      return response.data;
+    },
+    enabled: !!activeWorkspaceId,
+  });
+}
+
 export function useMemberMutations() {
   const queryClient = useQueryClient();
   const { activeWorkspaceId } = useWorkspaceStore();
@@ -27,6 +49,7 @@ export function useMemberMutations() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["members", activeWorkspaceId] });
+      queryClient.invalidateQueries({ queryKey: ["pending-invitations", activeWorkspaceId] });
     },
   });
 
@@ -47,6 +70,7 @@ export function useMemberMutations() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["members", activeWorkspaceId] });
+      queryClient.invalidateQueries({ queryKey: ["pending-invitations", activeWorkspaceId] });
     },
   });
 

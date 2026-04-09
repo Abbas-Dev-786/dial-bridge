@@ -1,6 +1,7 @@
 import uuid
 import json
 import httpx
+from urllib.parse import urlencode
 from datetime import datetime, timedelta
 from sqlalchemy import select, func, and_
 from sqlalchemy.orm import selectinload
@@ -233,7 +234,7 @@ async def initiate_oauth(db: AsyncSession, workspace_id: uuid.UUID, provider_key
         params["scope"] = separator.join(provider.oauth_scopes)
 
     # Build final URL
-    query_params = "&".join([f"{k}={v}" for k, v in params.items()])
+    query_params = urlencode(params)
     authorization_url = f"{auth_base_url}?{query_params}"
 
     return OAuthInitResponse(authorization_url=authorization_url, state=state)

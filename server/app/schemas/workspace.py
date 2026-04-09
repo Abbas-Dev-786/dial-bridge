@@ -20,6 +20,7 @@ class WorkspaceResponse(BaseModel):
     slug: str
     logo_url: str | None
     timezone: str
+    role: WorkspaceRole | None = None
     created_at: datetime
     model_config = ConfigDict(from_attributes=True)
 
@@ -37,3 +38,12 @@ class InviteMemberRequest(BaseModel):
 
 class UpdateMemberRoleRequest(BaseModel):
     role: WorkspaceRole
+
+
+class InvitationResponse(BaseModel):
+    id: UUID
+    email: EmailStr
+    role: WorkspaceRole
+    expires_at: datetime
+    created_at: datetime
+    model_config = ConfigDict(from_attributes=True)

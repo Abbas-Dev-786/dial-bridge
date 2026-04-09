@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, lazy, Suspense } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import {
@@ -23,7 +23,6 @@ import {
   ConversationFlowConfig,
 } from "@/components/ConversationFlowSettings";
 import { ToolsConfig, ToolConfig } from "@/components/ToolsConfig";
-import { VoicePlayground } from "@/components/VoicePlayground";
 import { cn, getErrorMessage } from "@/lib/utils";
 import { AgentHeader } from "@/components/agent-detail/AgentHeader";
 import {
@@ -31,7 +30,13 @@ import {
   AgentActiveBanner,
 } from "@/components/agent-detail/AgentConfigCard";
 import { useAgentDetailQuery, useAgentMutations, useVoicesQuery } from "@/hooks/api/useAgents";
-import { ConversationProvider } from "@elevenlabs/react";
+
+const VoicePlayground = lazy(() =>
+  import("@/components/VoicePlayground").then((module) => ({ default: module.VoicePlayground }))
+);
+const ConversationProvider = lazy(() =>
+  import("@elevenlabs/react").then((module) => ({ default: module.ConversationProvider }))
+);
 
 export default function AgentDetail() {
   const navigate = useNavigate();
@@ -426,16 +431,24 @@ export default function AgentDetail() {
         <DrawerContent className="max-h-[85vh]">
           <DrawerTitle className="sr-only">Voice Playground</DrawerTitle>
           <div className="overflow-y-auto p-4 pb-8">
-            <ConversationProvider>
-              <VoicePlayground
-                voiceConfig={agentData.voice}
-                onVoiceConfigChange={(v) => handleUpdate("voice", v)}
-                voices={voices}
-                agentName={agentData.name}
-                agentId={id}
-                isDirty={isDirty}
-              />
-            </ConversationProvider>
+            <Suspense
+              fallback={
+                <div className="flex min-h-[240px] items-center justify-center">
+                  <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                </div>
+              }
+            >
+              <ConversationProvider>
+                <VoicePlayground
+                  voiceConfig={agentData.voice}
+                  onVoiceConfigChange={(v) => handleUpdate("voice", v)}
+                  voices={voices}
+                  agentName={agentData.name}
+                  agentId={id}
+                  isDirty={isDirty}
+                />
+              </ConversationProvider>
+            </Suspense>
           </div>
         </DrawerContent>
       </Drawer>

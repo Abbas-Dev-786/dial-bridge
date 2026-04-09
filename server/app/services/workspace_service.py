@@ -2,7 +2,9 @@ import secrets
 from datetime import datetime, timedelta
 from uuid import UUID
 from sqlalchemy import select, update, delete
+from sqlalchemy.orm import joinedload
 from sqlalchemy.ext.asyncio import AsyncSession
+import structlog
 
 from app.models.user import User
 from app.models.workspace import Workspace, WorkspaceMember, Invitation
@@ -10,6 +12,8 @@ from app.schemas.workspace import WorkspaceCreate, WorkspaceUpdate, InviteMember
 from app.enums import WorkspaceRole
 from app.exceptions import ConflictError, NotFoundError, ForbiddenError, ValidationError
 from app.utils.audit import log_action
+
+logger = structlog.get_logger(__name__)
 
 async def create_workspace(db: AsyncSession, user: User, data: WorkspaceCreate) -> Workspace:
     # Check slug uniqueness
@@ -58,7 +62,7 @@ async def update_workspace(db: AsyncSession, workspace: Workspace, data: Workspa
 
 async def list_user_workspaces(db: AsyncSession, user: User) -> list[Workspace]:
     result = await db.execute(
-        select(Workspace)
+        select(Workspace, WorkspaceMember.role)
         .join(WorkspaceMember)
         .where(
             WorkspaceMember.user_id == user.id,
@@ -66,7 +70,14 @@ async def list_user_workspaces(db: AsyncSession, user: User) -> list[Workspace]:
             Workspace.deleted_at.is_(None)
         )
     )
-    return list(result.scalars().all())
+    rows = result.all()
+    workspaces: list[Workspace] = []
+
+    for workspace, role in rows:
+        workspace.role = role
+        workspaces.append(workspace)
+
+    return workspaces
 
 async def invite_member(db: AsyncSession, workspace: Workspace, inviter: User, data: InviteMemberRequest) -> Invitation:
     # Check if already a member
@@ -108,7 +119,12 @@ async def invite_member(db: AsyncSession, workspace: Workspace, inviter: User, d
     )
     
     # Stub for sending email
-    print(f"Invitation token for {data.email}: {invitation.token}")
+    logger.info(
+        "Invitation created",
+        workspace_id=str(workspace.id),
+        invitation_id=str(invitation.id),
+        invited_email=data.email,
+    )
     return invitation
 
 async def accept_invitation(db: AsyncSession, token: str, user: User) -> WorkspaceMember:
@@ -150,7 +166,13 @@ async def accept_invitation(db: AsyncSession, token: str, user: User) -> Workspa
         )
         db.add(member)
     
-    return member
+    result = await db.execute(
+        select(WorkspaceMember)
+        .where(WorkspaceMember.id == member.id)
+        .options(joinedload(WorkspaceMember.user))
+    )
+    hydrated_member = result.scalar_one()
+    return hydrated_member
 
 async def remove_member(db: AsyncSession, workspace: Workspace, target_user_id: UUID, requesting_member: WorkspaceMember):
     if requesting_member.role not in [WorkspaceRole.owner, WorkspaceRole.admin]:

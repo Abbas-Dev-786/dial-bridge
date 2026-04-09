@@ -47,9 +47,15 @@ export const setupInterceptors = (
     (response) => response,
     async (error) => {
       const originalRequest = error.config;
+      const requestUrl = String(originalRequest?.url || "");
+      const isRefreshRequest = requestUrl.includes("/api/v1/auth/refresh");
+
+      if (!originalRequest) {
+        return Promise.reject(error);
+      }
 
       // Handle 401 (Unauthorized) - Attempt Refresh
-      if (error.response?.status === 401 && !originalRequest._retry) {
+      if (error.response?.status === 401 && !originalRequest._retry && !isRefreshRequest) {
         if (isRefreshing) {
           return new Promise((resolve, reject) => {
             failedQueue.push({ resolve, reject });

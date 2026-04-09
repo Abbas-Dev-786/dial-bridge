@@ -1,24 +1,19 @@
-from sqlalchemy import create_engine
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
-from app.core.config import settings
+"""
+Compatibility shim.
 
-# Create engine
-engine = create_engine(
-    settings.SQLALCHEMY_DATABASE_URI_AS_STRING,
-    pool_pre_ping=True,
-)
+Historically this module created a separate SQLAlchemy engine/metadata that
+diverged from `app.database`. It now re-exports the canonical async database
+objects to avoid split metadata and config drift.
+"""
 
-# Create SessionLocal class
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+from typing import AsyncGenerator
+from sqlalchemy.ext.asyncio import AsyncSession
+from app.database import Base, AsyncSessionLocal, engine
 
-# Create Base class
-Base = declarative_base()
+SessionLocal = AsyncSessionLocal
 
-# Dependency to get DB session
-def get_db():
-    db = SessionLocal()
-    try:
+
+async def get_db() -> AsyncGenerator[AsyncSession, None]:
+    async with AsyncSessionLocal() as db:
         yield db
-    finally:
-        db.close()
+

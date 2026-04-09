@@ -2,7 +2,7 @@ import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -12,6 +12,7 @@ import { useAuthStore } from "@/store/useAuthStore";
 import { useToast } from "@/hooks/use-toast";
 import { useAuthMutations } from "@/hooks/api/useAuth";
 import { getErrorMessage } from "@/lib/utils";
+import { requestGoogleIdToken } from "@/lib/googleAuth";
 
 const loginSchema = z.object({
   email: z.string().email("Invalid email address"),
@@ -25,8 +26,10 @@ export default function Login() {
   const navigate = useNavigate();
   const location = useLocation();
   const { isAuthenticated } = useAuthStore();
-  const { login } = useAuthMutations();
+  const { login, googleLogin } = useAuthMutations();
   const { toast } = useToast();
+  const [isGooglePending, setIsGooglePending] = useState(false);
+  const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined;
 
   const from = location.state?.from?.pathname || "/dashboard";
 
@@ -69,6 +72,36 @@ export default function Login() {
     });
   };
 
+  const handleGoogleSignIn = async () => {
+    if (!googleClientId) {
+      toast({
+        variant: "destructive",
+        title: "Google Sign-In unavailable",
+        description: "VITE_GOOGLE_CLIENT_ID is not configured.",
+      });
+      return;
+    }
+
+    setIsGooglePending(true);
+    try {
+      const idToken = await requestGoogleIdToken(googleClientId);
+      await googleLogin.mutateAsync({ id_token: idToken });
+      toast({
+        title: "Welcome!",
+        description: "You have successfully signed in with Google.",
+      });
+      navigate(from, { replace: true });
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Google Sign-In failed",
+        description: getErrorMessage(error),
+      });
+    } finally {
+      setIsGooglePending(false);
+    }
+  };
+
   return (
     <div className="flex min-h-screen items-center justify-center bg-background p-4">
       <div className="w-full max-w-sm space-y-6">
@@ -85,7 +118,13 @@ export default function Login() {
         </div>
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-          <Button type="button" variant="outline" className="w-full gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            className="w-full gap-2"
+            onClick={handleGoogleSignIn}
+            disabled={isGooglePending}
+          >
             <svg className="h-4 w-4" viewBox="0 0 24 24">
               <path
                 d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 01-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z"
@@ -104,7 +143,7 @@ export default function Login() {
                 fill="#EA4335"
               />
             </svg>
-            Continue with Google
+            {isGooglePending ? "Signing in with Google..." : "Continue with Google"}
           </Button>
 
           <div className="relative">

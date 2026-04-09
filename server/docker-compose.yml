@@ -24,6 +24,7 @@ services:
     environment:
       - DATABASE_URL=postgresql+asyncpg://dialbridge:password@db:5432/dialbridge
       - REDIS_URL=redis://redis:6379/0
+      - ELEVENLABS_API_KEY=${ELEVENLABS_API_KEY:-}
     ports:
       - "8000:8000"
     depends_on:
@@ -38,6 +39,7 @@ services:
     environment:
       - DATABASE_URL=postgresql+asyncpg://dialbridge:password@db:5432/dialbridge
       - REDIS_URL=redis://redis:6379/0
+      - ELEVENLABS_API_KEY=${ELEVENLABS_API_KEY:-}
     depends_on:
       - db
       - redis
@@ -50,6 +52,7 @@ services:
     environment:
       - DATABASE_URL=postgresql+asyncpg://dialbridge:password@db:5432/dialbridge
       - REDIS_URL=redis://redis:6379/0
+      - ELEVENLABS_API_KEY=${ELEVENLABS_API_KEY:-}
     depends_on:
       - db
       - redis

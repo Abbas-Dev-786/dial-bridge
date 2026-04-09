@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import axios from "axios";
 import api from "@/lib/api";
 
 interface User {
@@ -54,11 +55,13 @@ export const useAuthStore = create<AuthState>()(
         if (!refreshToken) return null;
 
         try {
-          // Use a fresh axios instance or non-intercepted request if needed, 
-          // but here we can just use the base api since it doesn't have 401 interceptor loop yet.
-          const response = await api.post("/api/v1/auth/refresh", {
+          // Use a plain client so refresh cannot recurse into the auth interceptor queue.
+          const response = await axios.post(
+            `${import.meta.env.VITE_API_URL || "http://localhost:8000"}/api/v1/auth/refresh`,
+            {
             refresh_token: refreshToken,
-          });
+            }
+          );
 
           const { access_token, refresh_token: newRefreshToken } = response.data;
           set({ 

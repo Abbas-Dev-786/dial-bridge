@@ -7,7 +7,7 @@ import { Plus, Trash2, Loader2, ShieldCheck, Shield, User } from "lucide-react";
 import { InviteTeamMemberDialog } from "@/components/dialogs/InviteTeamMemberDialog";
 import { DeleteConfirmDialog } from "@/components/dialogs/DeleteConfirmDialog";
 import { toast } from "sonner";
-import { useMembersQuery, useMemberMutations } from "@/hooks/api/useSettings";
+import { useMembersQuery, useMemberMutations, usePendingInvitationsQuery } from "@/hooks/api/useSettings";
 import { getErrorMessage } from "@/lib/utils";
 
 interface Member {
@@ -22,11 +22,20 @@ interface Member {
   created_at: string;
 }
 
+interface PendingInvite {
+  id: string;
+  email: string;
+  role: string;
+  expires_at: string;
+  created_at: string;
+}
+
 export default function SettingsTeam() {
   const [inviteOpen, setInviteOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Member | null>(null);
 
   const { data: members = [], isLoading, refetch } = useMembersQuery();
+  const { data: pendingInvites = [], isLoading: isPendingInvitesLoading } = usePendingInvitationsQuery();
   const { removeMember, updateRole } = useMemberMutations();
 
   const handleRemove = () => {
@@ -50,7 +59,7 @@ export default function SettingsTeam() {
     });
   };
 
-  if (isLoading) {
+  if (isLoading || isPendingInvitesLoading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -123,6 +132,36 @@ export default function SettingsTeam() {
           </div>
         ))}
       </div>
+
+      {pendingInvites.length > 0 && (
+        <div className="space-y-3">
+          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Pending Invitations</p>
+          {pendingInvites.map((invite: PendingInvite) => (
+            <div key={invite.id} className="flex items-center gap-4 rounded-xl border bg-card p-4 shadow-sm">
+              <Avatar className="h-10 w-10 border-2 border-background shadow-sm">
+                <AvatarFallback className="bg-muted text-muted-foreground text-xs font-bold uppercase">
+                  {invite.email.charAt(0)}
+                </AvatarFallback>
+              </Avatar>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <p className="font-semibold text-sm truncate">{invite.email}</p>
+                  <Badge variant="secondary" className="text-[10px] uppercase font-bold py-0 h-4 bg-muted text-muted-foreground">
+                    Pending
+                  </Badge>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Expires {new Date(invite.expires_at).toLocaleDateString()}
+                </p>
+              </div>
+              <div className="hidden sm:flex items-center gap-1.5 px-2 py-1 rounded-md bg-muted/50 border border-border/40">
+                {getRoleIcon(invite.role)}
+                <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{invite.role}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       <InviteTeamMemberDialog open={inviteOpen} onOpenChange={setInviteOpen} onSuccess={refetch} />
       

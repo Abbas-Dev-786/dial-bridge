@@ -1,14 +1,53 @@
 import { useMutation } from "@tanstack/react-query";
+import axios from "axios";
 import api from "@/lib/api";
 import { useAuthStore } from "@/store/useAuthStore";
+
+type AuthTokensResponse = {
+  access_token: string;
+  refresh_token: string;
+  token_type: string;
+};
+
+type UserResponse = {
+  id: string;
+  email: string;
+  full_name: string;
+  avatar_url?: string | null;
+};
+
+type AuthPayload = {
+  access_token: string;
+  refresh_token: string;
+  user: UserResponse;
+};
+
+const bareApi = axios.create({
+  baseURL: import.meta.env.VITE_API_URL || "http://localhost:8000",
+  headers: {
+    "Content-Type": "application/json",
+  },
+});
+
+async function buildAuthPayload(tokens: AuthTokensResponse): Promise<AuthPayload> {
+  const meResponse = await bareApi.get<UserResponse>("/api/v1/auth/me", {
+    headers: { Authorization: `Bearer ${tokens.access_token}` },
+  });
+
+  return {
+    access_token: tokens.access_token,
+    refresh_token: tokens.refresh_token,
+    user: meResponse.data,
+  };
+}
 
 export function useAuthMutations() {
   const { login: storeLogin } = useAuthStore();
 
   const login = useMutation({
-    mutationFn: async (data: any) => {
-      const response = await api.post("/api/v1/auth/login", data);
-      return response.data;
+    mutationFn: async (data: { email: string; password: string }) => {
+      const response = await api.post<AuthTokensResponse>("/api/v1/auth/login", data);
+      return await buildAuthPayload(response.data);
     },
     onSuccess: (data) => {
       const { access_token, refresh_token, user } = data;
@@ -17,9 +56,13 @@ export function useAuthMutations() {
   });
 
   const signup = useMutation({
-    mutationFn: async (data: any) => {
-      const response = await api.post("/api/v1/auth/signup", data);
-      return response.data;
+    mutationFn: async (data: { email: string; password: string; full_name: string }) => {
+      await api.post("/api/v1/auth/register", data);
+      const loginResponse = await api.post<AuthTokensResponse>("/api/v1/auth/login", {
+        email: data.email,
+        password: data.password,
+      });
+      return await buildAuthPayload(loginResponse.data);
     },
     onSuccess: (data) => {
       const { access_token, refresh_token, user } = data;
@@ -35,8 +78,11 @@ export function useAuthMutations() {
   });
 
   const resetPassword = useMutation({
-    mutationFn: async ({ token, data }: { token: string; data: any }) => {
-      const response = await api.post(`/api/v1/auth/reset-password/${token}`, data);
+    mutationFn: async ({ token, new_password }: { token: string; new_password: string }) => {
+      const response = await api.post("/api/v1/auth/reset-password", {
+        token,
+        new_password,
+      });
       return response.data;
     },
   });
@@ -62,5 +108,25 @@ export function useAuthMutations() {
     },
   });
 
-  return { login, signup, forgotPassword, resetPassword, acceptInvite, createWorkspace, oauthCallback };
+  const googleLogin = useMutation({
+    mutationFn: async (data: { id_token: string }) => {
+      const response = await api.post<AuthTokensResponse>("/api/v1/auth/google", data);
+      return await buildAuthPayload(response.data);
+    },
+    onSuccess: (data) => {
+      const { access_token, refresh_token, user } = data;
+      storeLogin(access_token, refresh_token, user);
+    },
+  });
+
+  return {
+    login,
+    signup,
+    googleLogin,
+    forgotPassword,
+    resetPassword,
+    acceptInvite,
+    createWorkspace,
+    oauthCallback,
+  };
 }

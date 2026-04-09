@@ -18,4 +18,17 @@ export default defineConfig(({ mode }) => ({
       "@": path.resolve(__dirname, "./src"),
     },
   },
+  build: {
+    chunkSizeWarningLimit: 650,
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (!id.includes("node_modules")) return;
+          if (id.includes("recharts")) return "charts-vendor";
+          if (id.includes("@elevenlabs")) return "elevenlabs-vendor";
+          if (id.includes("@radix-ui")) return "radix-vendor";
+        },
+      },
+    },
+  },
 }));

@@ -21,8 +21,12 @@ class MailService:
         if not all([self.smtp_host, self.smtp_user, self.smtp_password]):
             logger.warning("SMTP settings not fully configured, skipping email send", 
                            to_email=to_email, subject=subject)
-            # Log the content for development
-            logger.info("Email content (suppressed)", html_content=html_content)
+            logger.info(
+                "Email body suppressed",
+                to_email=to_email,
+                subject=subject,
+                body_length=len(html_content),
+            )
             return
 
         await asyncio.to_thread(self._send_sync, to_email, subject, html_content)

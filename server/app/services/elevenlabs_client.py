@@ -1,8 +1,10 @@
 import httpx
+import structlog
 from app.config import settings
-from app.exceptions import ElevenLabsError, ValidationError
+from app.exceptions import ElevenLabsError
 
 ELEVENLABS_BASE_URL = "https://api.elevenlabs.io/v1"
+logger = structlog.get_logger(__name__)
 
 class ElevenLabsClient:
     def __init__(self):
@@ -28,23 +30,24 @@ class ElevenLabsClient:
         if "json" in kwargs and "headers" not in kwargs:
             kwargs["headers"] = {"Content-Type": "application/json"}
         
-        # Log the request for debugging
-        # Ensure path starts with / but base_url doesn't end with one (or vice versa)
-        base = str(self._client.base_url).rstrip("/")
         normalized_path = "/" + path.lstrip("/")
-        full_url = f"{base}{normalized_path}"
-        print(f"DEBUG: ElevenLabs Request: {method} {full_url}")
-        if "json" in kwargs:
-            print(f"DEBUG: Payload: {kwargs['json']}")
-        if "params" in kwargs:
-            print(f"DEBUG: Params: {kwargs['params']}")
-            
+        logger.debug("ElevenLabs request", method=method, path=normalized_path)
+
         response = await self._client.request(method, path, **kwargs)
         
-        # Log the response
-        print(f"DEBUG: ElevenLabs Response Status: {response.status_code}")
+        logger.debug(
+            "ElevenLabs response",
+            method=method,
+            path=normalized_path,
+            status_code=response.status_code,
+        )
         if not response.is_success:
-            print(f"DEBUG: ElevenLabs Error Body: {response.text[:500]}")
+            logger.warning(
+                "ElevenLabs request failed",
+                method=method,
+                path=normalized_path,
+                status_code=response.status_code,
+            )
             raise ElevenLabsError(
                 f"{response.status_code} — {response.text[:200]}"
             )

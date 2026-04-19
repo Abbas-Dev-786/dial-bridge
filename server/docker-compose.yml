@@ -6,7 +6,6 @@ services:
   # ─────────────────────────────────────────
   db:
     image: postgres:16-alpine
-    container_name: dialbridge_db
     restart: unless-stopped
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-dialbridge}
@@ -32,7 +31,6 @@ services:
   # ─────────────────────────────────────────
   redis:
     image: redis:7-alpine
-    container_name: dialbridge_redis
     restart: unless-stopped
     command: redis-server --requirepass ${REDIS_PASSWORD} --appendonly yes
     volumes:
@@ -43,17 +41,16 @@ services:
       test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
       interval: 10s
       timeout: 5s
-      retries: 5
-      start_period: 10s
+      retries: 10
+      start_period: 20s
 
   # ─────────────────────────────────────────
-  # API (FastAPI) — runs migrations first
+  # API (FastAPI)
   # ─────────────────────────────────────────
   api:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: dialbridge_api
     restart: unless-stopped
     command: >
       sh -c "
@@ -62,7 +59,7 @@ services:
         echo 'Running migrations...' &&
         alembic upgrade head &&
         echo 'Starting API server...' &&
-        fastapi run app/main.py --port 8000 --host 0.0.0.0
+        fastapi run app/main.py --host 0.0.0.0 --port 8000
       "
     environment:
       APP_ENV: ${APP_ENV:-production}
@@ -94,30 +91,24 @@ services:
       MAIL_FROM_EMAIL: ${MAIL_FROM_EMAIL:-noreply@dialbridge.ai}
       MAIL_FROM_NAME: ${MAIL_FROM_NAME:-DialBridge}
 
-      HUBSPOT_CLIENT_ID: ${HUBSPOT_CLIENT_ID:-}
-      HUBSPOT_CLIENT_SECRET: ${HUBSPOT_CLIENT_SECRET:-}
-      SALESFORCE_CLIENT_ID: ${SALESFORCE_CLIENT_ID:-}
-      SALESFORCE_CLIENT_SECRET: ${SALESFORCE_CLIENT_SECRET:-}
-      SLACK_CLIENT_ID: ${SLACK_CLIENT_ID:-}
-      SLACK_CLIENT_SECRET: ${SLACK_CLIENT_SECRET:-}
-      GOOGLE_CAL_CLIENT_ID: ${GOOGLE_CAL_CLIENT_ID:-}
-      GOOGLE_CAL_CLIENT_SECRET: ${GOOGLE_CAL_CLIENT_SECRET:-}
-      PIPEDRIVE_CLIENT_ID: ${PIPEDRIVE_CLIENT_ID:-}
-      PIPEDRIVE_CLIENT_SECRET: ${PIPEDRIVE_CLIENT_SECRET:-}
-    ports:
-      - "8000:8000"
+    # ❌ removed ports (IMPORTANT)
+    expose:
+      - "8000"
+
     depends_on:
       db:
         condition: service_healthy
       redis:
         condition: service_healthy
+
     networks:
       - dialbridge_network
+
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8000/health || exit 1"]
       interval: 30s
       timeout: 10s
-      retries: 3
+      retries: 5
       start_period: 40s
 
   # ─────────────────────────────────────────
@@ -127,7 +118,6 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: dialbridge_celery_worker
     restart: unless-stopped
     command: celery -A app.background.celery_app worker --loglevel=info --concurrency=4 -Q default,calls,feeders,webhooks
     environment:
@@ -139,32 +129,9 @@ services:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-dialbridge}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-dialbridge}
       REDIS_URL: redis://default:${REDIS_PASSWORD}@redis:6379/0
 
-      ELEVENLABS_API_KEY: ${ELEVENLABS_API_KEY}
-      ELEVENLABS_BASE_URL: ${ELEVENLABS_BASE_URL:-https://api.elevenlabs.io/v1}
-      ELEVENLABS_WEBHOOK_SECRET: ${ELEVENLABS_WEBHOOK_SECRET}
-
       GROQ_API_KEY: ${GROQ_API_KEY}
       GROQ_MODEL: ${GROQ_MODEL:-llama-3.3-70b-versatile}
 
-      FRONTEND_URL: ${FRONTEND_URL}
-
-      SMTP_HOST: ${SMTP_HOST:-smtp-relay.brevo.com}
-      SMTP_PORT: ${SMTP_PORT:-587}
-      SMTP_USER: ${SMTP_USER:-}
-      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
-      MAIL_FROM_EMAIL: ${MAIL_FROM_EMAIL:-noreply@dialbridge.ai}
-      MAIL_FROM_NAME: ${MAIL_FROM_NAME:-DialBridge}
-
-      HUBSPOT_CLIENT_ID: ${HUBSPOT_CLIENT_ID:-}
-      HUBSPOT_CLIENT_SECRET: ${HUBSPOT_CLIENT_SECRET:-}
-      SALESFORCE_CLIENT_ID: ${SALESFORCE_CLIENT_ID:-}
-      SALESFORCE_CLIENT_SECRET: ${SALESFORCE_CLIENT_SECRET:-}
-      SLACK_CLIENT_ID: ${SLACK_CLIENT_ID:-}
-      SLACK_CLIENT_SECRET: ${SLACK_CLIENT_SECRET:-}
-      GOOGLE_CAL_CLIENT_ID: ${GOOGLE_CAL_CLIENT_ID:-}
-      GOOGLE_CAL_CLIENT_SECRET: ${GOOGLE_CAL_CLIENT_SECRET:-}
-      PIPEDRIVE_CLIENT_ID: ${PIPEDRIVE_CLIENT_ID:-}
-      PIPEDRIVE_CLIENT_SECRET: ${PIPEDRIVE_CLIENT_SECRET:-}
     depends_on:
       db:
         condition: service_healthy
@@ -172,45 +139,29 @@ services:
         condition: service_healthy
       api:
         condition: service_healthy
+
     networks:
       - dialbridge_network
 
   # ─────────────────────────────────────────
-  # Celery Beat (Scheduler)
+  # Celery Beat
   # ─────────────────────────────────────────
   celery-beat:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: dialbridge_celery_beat
     restart: unless-stopped
-    command: celery -A app.background.celery_app beat --loglevel=info --scheduler celery.beat:PersistentScheduler
+    command: celery -A app.background.celery_app beat --loglevel=info
     environment:
       APP_ENV: ${APP_ENV:-production}
       APP_SECRET_KEY: ${APP_SECRET_KEY}
-      DEBUG: ${DEBUG:-false}
-      BASE_URL: ${BASE_URL}
 
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-dialbridge}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-dialbridge}
       REDIS_URL: redis://default:${REDIS_PASSWORD}@redis:6379/0
 
-      ELEVENLABS_API_KEY: ${ELEVENLABS_API_KEY}
-      ELEVENLABS_BASE_URL: ${ELEVENLABS_BASE_URL:-https://api.elevenlabs.io/v1}
-      ELEVENLABS_WEBHOOK_SECRET: ${ELEVENLABS_WEBHOOK_SECRET}
-
-      GROQ_API_KEY: ${GROQ_API_KEY}
-      GROQ_MODEL: ${GROQ_MODEL:-llama-3.3-70b-versatile}
-
-      FRONTEND_URL: ${FRONTEND_URL}
-
-      SMTP_HOST: ${SMTP_HOST:-smtp-relay.brevo.com}
-      SMTP_PORT: ${SMTP_PORT:-587}
-      SMTP_USER: ${SMTP_USER:-}
-      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
-      MAIL_FROM_EMAIL: ${MAIL_FROM_EMAIL:-noreply@dialbridge.ai}
-      MAIL_FROM_NAME: ${MAIL_FROM_NAME:-DialBridge}
     volumes:
       - celerybeat_data:/app/celerybeat-schedule
+
     depends_on:
       db:
         condition: service_healthy
@@ -218,22 +169,20 @@ services:
         condition: service_healthy
       api:
         condition: service_healthy
+
     networks:
       - dialbridge_network
 
 # ─────────────────────────────────────────
-# Named Volumes
+# Volumes
 # ─────────────────────────────────────────
 volumes:
   postgres_data:
-    driver: local
   redis_data:
-    driver: local
   celerybeat_data:
-    driver: local
 
 # ─────────────────────────────────────────
-# Networks
+# Network
 # ─────────────────────────────────────────
 networks:
   dialbridge_network:

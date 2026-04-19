@@ -52,11 +52,15 @@ async def list_elevenlabs_available_numbers(db: AsyncSession, workspace_id: UUID
         if not el_id or not number:
             continue
             
+        assigned_agent = el.get("assigned_agent_id") or el.get("assigned_agent")
+        if isinstance(assigned_agent, dict):
+            assigned_agent = assigned_agent.get("agent_id")
+
         available.append(ElevenLabsAvailableNumber(
             elevenlabs_number_id=el_id,
             number=number,
             label=el.get("label"),
-            assigned_agent_id=el.get("assigned_agent_id") or el.get("assigned_agent"),
+            assigned_agent_id=assigned_agent,
             is_imported=el_id in imported_by_this_workspace,
             is_unavailable=el_id in imported_by_other_workspace
         ))

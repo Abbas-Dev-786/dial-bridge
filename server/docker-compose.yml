@@ -2,7 +2,7 @@ version: "3.9"
 
 services:
   # ─────────────────────────────────────────
-  # PostgreSQL Database
+  # PostgreSQL
   # ─────────────────────────────────────────
   db:
     image: postgres:16-alpine
@@ -45,13 +45,14 @@ services:
       start_period: 20s
 
   # ─────────────────────────────────────────
-  # API (FastAPI)
+  # API (FastAPI) - PUBLIC SERVICE
   # ─────────────────────────────────────────
   api:
     build:
       context: .
       dockerfile: Dockerfile
     restart: unless-stopped
+
     command: >
       sh -c "
         echo 'Waiting for DB...' &&
@@ -59,8 +60,9 @@ services:
         echo 'Running migrations...' &&
         alembic upgrade head &&
         echo 'Starting API server...' &&
-        fastapi run app/main.py --host 0.0.0.0 --port 8000
+        uvicorn app.main:app --host 0.0.0.0 --port 8000
       "
+
     environment:
       APP_ENV: ${APP_ENV:-production}
       APP_SECRET_KEY: ${APP_SECRET_KEY}
@@ -71,29 +73,16 @@ services:
       REDIS_URL: redis://default:${REDIS_PASSWORD}@redis:6379/0
 
       JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
-      ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-60}
-      REFRESH_TOKEN_EXPIRE_DAYS: ${REFRESH_TOKEN_EXPIRE_DAYS:-30}
 
-      ELEVENLABS_API_KEY: ${ELEVENLABS_API_KEY}
-      ELEVENLABS_BASE_URL: ${ELEVENLABS_BASE_URL:-https://api.elevenlabs.io/v1}
-      ELEVENLABS_WEBHOOK_SECRET: ${ELEVENLABS_WEBHOOK_SECRET}
-
-      GROQ_API_KEY: ${GROQ_API_KEY}
-      GROQ_MODEL: ${GROQ_MODEL:-llama-3.3-70b-versatile}
-
-      FRONTEND_URL: ${FRONTEND_URL}
-      GOOGLE_OAUTH_CLIENT_ID: ${GOOGLE_OAUTH_CLIENT_ID:-}
-
-      SMTP_HOST: ${SMTP_HOST:-smtp-relay.brevo.com}
-      SMTP_PORT: ${SMTP_PORT:-587}
-      SMTP_USER: ${SMTP_USER:-}
-      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
-      MAIL_FROM_EMAIL: ${MAIL_FROM_EMAIL:-noreply@dialbridge.ai}
-      MAIL_FROM_NAME: ${MAIL_FROM_NAME:-DialBridge}
-
-    # ❌ removed ports (IMPORTANT)
     expose:
       - "8000"
+
+    # 🔥 CRITICAL: Coolify routing
+    labels:
+      - "coolify.managed=true"
+      - "coolify.type=application"
+      - "coolify.port=8000"
+      - "coolify.domains=dialbridge-api.abbasbhanpura.tech"
 
     depends_on:
       db:
@@ -104,13 +93,6 @@ services:
     networks:
       - dialbridge_network
 
-    healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8000/health || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 40s
-
   # ─────────────────────────────────────────
   # Celery Worker
   # ─────────────────────────────────────────
@@ -119,18 +101,11 @@ services:
       context: .
       dockerfile: Dockerfile
     restart: unless-stopped
-    command: celery -A app.background.celery_app worker --loglevel=info --concurrency=4 -Q default,calls,feeders,webhooks
-    environment:
-      APP_ENV: ${APP_ENV:-production}
-      APP_SECRET_KEY: ${APP_SECRET_KEY}
-      DEBUG: ${DEBUG:-false}
-      BASE_URL: ${BASE_URL}
+    command: celery -A app.background.celery_app worker --loglevel=info --concurrency=4
 
+    environment:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-dialbridge}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-dialbridge}
       REDIS_URL: redis://default:${REDIS_PASSWORD}@redis:6379/0
-
-      GROQ_API_KEY: ${GROQ_API_KEY}
-      GROQ_MODEL: ${GROQ_MODEL:-llama-3.3-70b-versatile}
 
     depends_on:
       db:
@@ -138,7 +113,7 @@ services:
       redis:
         condition: service_healthy
       api:
-        condition: service_healthy
+        condition: service_started
 
     networks:
       - dialbridge_network
@@ -152,10 +127,8 @@ services:
       dockerfile: Dockerfile
     restart: unless-stopped
     command: celery -A app.background.celery_app beat --loglevel=info
-    environment:
-      APP_ENV: ${APP_ENV:-production}
-      APP_SECRET_KEY: ${APP_SECRET_KEY}
 
+    environment:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-dialbridge}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-dialbridge}
       REDIS_URL: redis://default:${REDIS_PASSWORD}@redis:6379/0
 
@@ -168,7 +141,7 @@ services:
       redis:
         condition: service_healthy
       api:
-        condition: service_healthy
+        condition: service_started
 
     networks:
       - dialbridge_network

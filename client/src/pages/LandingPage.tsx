@@ -18,7 +18,7 @@ export default function LandingPage() {
       <StatsSection />
       <FeatureSection />
       <HowItWorksSection />
-      <PricingSection />
+      {/* <PricingSection /> */}
       <TestimonialSection />
       <CTASection />
       <Footer />

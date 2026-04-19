@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Phone, Loader2, Check, Globe, Briefcase } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useWorkspaceStore } from "@/store/useWorkspaceStore";
+import { useAuthStore } from "@/store/useAuthStore";
 import { useToast } from "@/hooks/use-toast";
 import { useAuthMutations } from "@/hooks/api/useAuth";
 import { getErrorMessage } from "@/lib/utils";
@@ -50,6 +51,22 @@ export default function SignUp() {
       password: "",
     },
   });
+
+  const { isAuthenticated } = useAuthStore();
+
+  // If already authenticated but has no workspaces, default to step 2
+  useEffect(() => {
+    if (isAuthenticated) {
+      const checkWorkspaces = async () => {
+        await fetchWorkspaces();
+        const { workspaces } = useWorkspaceStore.getState();
+        if (workspaces.length === 0) {
+          setStep(2);
+        }
+      };
+      checkWorkspaces();
+    }
+  }, [isAuthenticated, fetchWorkspaces]);
 
   // Step 2 Form
   const workspaceForm = useForm<WorkspaceFormValues>({

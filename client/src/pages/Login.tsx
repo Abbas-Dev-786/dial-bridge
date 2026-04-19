@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Phone, Loader2 } from "lucide-react";
 import { useAuthStore } from "@/store/useAuthStore";
+import { useWorkspaceStore } from "@/store/useWorkspaceStore";
 import { useToast } from "@/hooks/use-toast";
 import { useAuthMutations } from "@/hooks/api/useAuth";
 import { getErrorMessage } from "@/lib/utils";
@@ -26,6 +27,7 @@ export default function Login() {
   const navigate = useNavigate();
   const location = useLocation();
   const { isAuthenticated } = useAuthStore();
+  const { fetchWorkspaces, setActiveWorkspaceId } = useWorkspaceStore();
   const { login, googleLogin } = useAuthMutations();
   const { toast } = useToast();
   const [isGooglePending, setIsGooglePending] = useState(false);
@@ -86,8 +88,26 @@ export default function Login() {
     try {
       const idToken = await requestGoogleIdToken(googleClientId);
       await googleLogin.mutateAsync({ id_token: idToken });
+      
+      // Check for workspaces
+      await fetchWorkspaces();
+      const { workspaces, activeWorkspaceId } = useWorkspaceStore.getState();
+
+      if (workspaces.length === 0) {
+        toast({
+          title: "Account created!",
+          description: "Welcome! Now let's set up your workspace.",
+        });
+        navigate("/signup"); // Signup page handles step 2 (workspace creation)
+        return;
+      }
+
+      if (!activeWorkspaceId) {
+        setActiveWorkspaceId(workspaces[0].id);
+      }
+
       toast({
-        title: "Welcome!",
+        title: "Welcome back!",
         description: "You have successfully signed in with Google.",
       });
       navigate(from, { replace: true });

@@ -91,6 +91,7 @@ export async function requestGoogleIdToken(clientId: string): Promise<string> {
       fn();
     };
 
+    // Initialize only if not already initialized for this client
     googleId.initialize({
       client_id: clientId,
       auto_select: false,

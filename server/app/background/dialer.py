@@ -47,7 +47,7 @@ async def feed_campaign_contacts(self, campaign_id: str):
 
         # 2. Check schedule window
         if not _is_within_schedule(campaign):
-            logger.debug(f"Campaign {campaign_id} outside schedule window — backing off 60s")
+            logger.info(f"Campaign {campaign_id} outside schedule window — backing off 60s")
             await _reschedule_feeder(db, campaign, delay=60)
             return
 

@@ -101,7 +101,7 @@ services:
       context: .
       dockerfile: Dockerfile
     restart: unless-stopped
-    command: celery -A app.background.celery_app worker --loglevel=info --concurrency=4
+    command: celery -A app.background.celery_app worker --loglevel=info --concurrency=4 -Q feeders,calls,webhooks,default
 
     environment:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-dialbridge}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-dialbridge}

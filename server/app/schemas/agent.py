@@ -1,7 +1,7 @@
 from uuid import UUID
 from datetime import datetime
 from pydantic import BaseModel, ConfigDict, Field, field_validator
-from app.enums import AgentStatus, LLMProvider, InterruptionSensitivity, ToolType, HttpMethod
+from app.enums import AgentStatus, CampaignStatus, LLMProvider, InterruptionSensitivity, ToolType, HttpMethod
 from app.utils.prompt_validation import validate_first_message_text, validate_system_prompt_text
 
 # Voice config
@@ -122,6 +122,9 @@ class AgentResponse(BaseModel):
     # Derived field — whether this agent is blocked by an active campaign
     active_campaign_id: UUID | None = None
     active_campaign_name: str | None = None
+    assigned_campaign_id: UUID | None = None
+    assigned_campaign_name: str | None = None
+    assigned_campaign_status: CampaignStatus | None = None
     model_config = ConfigDict(from_attributes=True)
 
 class AgentListResponse(BaseModel):
@@ -133,5 +136,8 @@ class AgentListResponse(BaseModel):
     success_rate: float | None = None
     active_campaign_id: UUID | None = None
     active_campaign_name: str | None = None
+    assigned_campaign_id: UUID | None = None
+    assigned_campaign_name: str | None = None
+    assigned_campaign_status: CampaignStatus | None = None
     created_at: datetime
     model_config = ConfigDict(from_attributes=True)

@@ -28,15 +28,15 @@ async def elevenlabs_post_call_webhook(
     body = await request.body()
     signature = request.headers.get("elevenlabs-signature", "")
 
+    # Verify signature against the raw body before parsing JSON.
+    if settings.elevenlabs_webhook_secret:
+        if not verify_elevenlabs_signature(body, signature, settings.elevenlabs_webhook_secret):
+            raise HTTPException(status_code=401, detail="Invalid webhook signature")
+
     try:
         payload = json.loads(body)
     except json.JSONDecodeError:
         raise HTTPException(status_code=400, detail="Invalid JSON")
-
-    # 1. Verify Signature if secret is set
-    if settings.elevenlabs_webhook_secret:
-        if not verify_elevenlabs_signature(body, signature, settings.elevenlabs_webhook_secret):
-            raise HTTPException(status_code=401, detail="Invalid webhook signature")
 
     # Process in background
     background_tasks.add_task(process_webhook_bg, payload)
@@ -55,15 +55,15 @@ async def elevenlabs_initiation_webhook(
     body = await request.body()
     signature = request.headers.get("elevenlabs-signature", "")
 
-    try:
-        payload = json.loads(body)
-    except json.JSONDecodeError:
-        raise HTTPException(status_code=400, detail="Invalid JSON")
-
     # Verify Signature
     if settings.elevenlabs_webhook_secret:
         if not verify_elevenlabs_signature(body, signature, settings.elevenlabs_webhook_secret):
             raise HTTPException(status_code=401, detail="Invalid webhook signature")
+
+    try:
+        payload = json.loads(body)
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=400, detail="Invalid JSON")
 
     # Process synchronously because we might want to return dynamic variables
     response_data = await handle_initiation_webhook(db, payload)

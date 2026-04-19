@@ -2,17 +2,14 @@ import { useState, useEffect, useMemo } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useCampaignsQuery } from "@/hooks/api/useCampaigns";
 
-import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { DataTable, Column } from "@/components/shared/DataTable";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { KBSyncBadge } from "@/components/shared/KBSyncBadge";
 import { Progress } from "@/components/ui/progress";
-import { Plus, Megaphone, Play, Pause, MoreHorizontal, Copy, Loader2, AlertCircle } from "lucide-react";
+import { Plus, Megaphone, Loader2, AlertCircle } from "lucide-react";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { CreateCampaignModal } from "@/components/dialogs/CreateCampaignModal";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { useToast } from "@/hooks/use-toast";
 
 interface CampaignListItem {
   id: string;
@@ -125,33 +122,6 @@ export function CampaignsList() {
           {(r.total_spend_cents / 100).toLocaleString("en-US", { style: "currency", currency: "USD" })}
         </span>
       )
-    },
-    {
-      key: "actions", label: "",
-      render: (r) => (
-        <div className="flex items-center gap-1">
-          {r.status !== "draft" && r.status !== "completed" && (
-            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={(e) => {
-              e.stopPropagation();
-              // In the future: handle pause/play API
-            }}>
-              {r.status === "live" ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
-            </Button>
-          )}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={(e) => e.stopPropagation()}>
-                <MoreHorizontal className="h-3.5 w-3.5" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem disabled className="opacity-50 cursor-not-allowed">
-                <Copy className="mr-2 h-3.5 w-3.5" /> Duplicate (TBD)
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-      ),
     },
   ], []);
 

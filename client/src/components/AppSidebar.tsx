@@ -125,7 +125,7 @@ export function AppSidebar() {
       </SidebarContent>
 
       <SidebarFooter className="p-3">
-        {!collapsed && (
+        {/* {!collapsed && (
           <div className="rounded-lg border bg-card p-3">
             <p className="text-xs font-medium text-primary">Pro Plan</p>
             <p className="text-xs text-muted-foreground">1,250 / 5,000 calls</p>
@@ -133,14 +133,15 @@ export function AppSidebar() {
               <div className="h-full w-1/4 rounded-full bg-primary transition-all" />
             </div>
           </div>
-        )}
+        )} */}
       </SidebarFooter>
     </Sidebar>
   );
 }
 
 function WorkspaceSwitcher({ collapsed }: { collapsed: boolean }) {
-  const { workspaces, activeWorkspaceId, setActiveWorkspaceId } = useWorkspaceStore();
+  const { workspaces, activeWorkspaceId, setActiveWorkspaceId } =
+    useWorkspaceStore();
   const [open, setOpen] = useState(false);
   const activeWorkspace = workspaces.find((w) => w.id === activeWorkspaceId);
 
@@ -164,7 +165,9 @@ function WorkspaceSwitcher({ collapsed }: { collapsed: boolean }) {
               </span>
             </div>
           )}
-          {!collapsed && <ChevronsUpDown className="ml-auto size-4 opacity-50" />}
+          {!collapsed && (
+            <ChevronsUpDown className="ml-auto size-4 opacity-50" />
+          )}
         </SidebarMenuButton>
       </PopoverTrigger>
       <PopoverContent
@@ -204,7 +207,6 @@ function WorkspaceSwitcher({ collapsed }: { collapsed: boolean }) {
               <CommandItem className="gap-2 px-2 py-1.5 focus:bg-primary/5 cursor-not-allowed opacity-50">
                 <Plus className="h-4 w-4" />
                 <span className="font-medium">Create Workspace</span>
-                <span className="ml-auto text-[10px] text-muted-foreground uppercase font-bold tracking-tighter">Pro</span>
               </CommandItem>
             </CommandGroup>
           </CommandList>
@@ -213,4 +215,3 @@ function WorkspaceSwitcher({ collapsed }: { collapsed: boolean }) {
     </Popover>
   );
 }
-

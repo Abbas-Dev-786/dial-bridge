@@ -1,5 +1,7 @@
-from types import SimpleNamespace
-from unittest.mock import AsyncMock
+import hashlib
+import hmac
+import time
+from unittest.mock import AsyncMock, Mock
 from uuid import uuid4
 
 import pytest
@@ -8,7 +10,11 @@ from app.enums import CallStatus, ContactStatus, RetryOnOutcome
 from app.models.call import Call
 from app.models.campaign import Campaign
 from app.models.contact import Contact
-from app.services.webhook_handler import handle_call_ended, handle_call_failed
+from app.services.webhook_handler import (
+    handle_call_initiation_failure,
+    handle_post_call_transcription,
+    verify_elevenlabs_signature,
+)
 
 
 class ScalarResult:
@@ -19,201 +25,278 @@ class ScalarResult:
         return self._value
 
 
-@pytest.mark.asyncio
-async def test_handle_call_ended_updates_terminal_state_once():
-    campaign = Campaign(
-        id=uuid4(),
-        contacts_called=2,
-        contacts_remaining=5,
-        calls_successful=1,
-        calls_failed=0,
-        total_spend_cents=25,
-        retry_on_outcomes=[RetryOnOutcome.no_answer],
-        max_retries=3,
-        retry_delay_minutes=30,
-    )
-    contact = Contact(id=uuid4(), status=ContactStatus.calling, retry_count=0)
-    call = Call(
-        id=uuid4(),
-        campaign_id=campaign.id,
-        contact_id=contact.id,
-        status=CallStatus.ringing,
-        cost_telephony_cents=10,
-        cost_llm_cents=20,
-        cost_tts_cents=30,
-        cost_stt_cents=40,
-    )
+def _build_call_with_relations(
+    *,
+    campaign_kwargs: dict | None = None,
+    contact_kwargs: dict | None = None,
+    call_kwargs: dict | None = None,
+):
+    campaign_data = {
+        "id": uuid4(),
+        "contacts_called": 2,
+        "contacts_remaining": 5,
+        "calls_successful": 1,
+        "calls_failed": 0,
+        "total_spend_cents": 25,
+        "retry_on_outcomes": [RetryOnOutcome.no_answer],
+        "max_retries": 3,
+        "retry_delay_minutes": 30,
+    }
+    campaign_data.update(campaign_kwargs or {})
+    campaign = Campaign(**campaign_data)
+
+    contact_data = {
+        "id": uuid4(),
+        "status": ContactStatus.calling,
+        "retry_count": 0,
+    }
+    contact_data.update(contact_kwargs or {})
+    contact = Contact(**contact_data)
+
+    call_data = {
+        "id": uuid4(),
+        "campaign_id": campaign.id,
+        "contact_id": contact.id,
+        "status": CallStatus.in_progress,
+        "retry_number": 0,
+        "cost_telephony_cents": 0,
+        "cost_llm_cents": 0,
+        "cost_tts_cents": 0,
+        "cost_stt_cents": 0,
+    }
+    call_data.update(call_kwargs or {})
+    call = Call(**call_data)
     call.contact = contact
     call.campaign = campaign
+    return call, contact, campaign
+
+
+@pytest.mark.asyncio
+async def test_handle_post_call_transcription_updates_campaign_stats(monkeypatch):
+    call, contact, campaign = _build_call_with_relations()
 
     db = AsyncMock()
-    db.execute.return_value = ScalarResult(call)
+    db.add = Mock()
+    db.execute.side_effect = [ScalarResult(call), None, None, None]
 
-    await handle_call_ended(
+    enqueue_mock = AsyncMock()
+    monkeypatch.setattr(
+        "app.services.webhook_handler.enqueue_webhook_delivery",
+        enqueue_mock,
+    )
+
+    await handle_post_call_transcription(
         db,
         {
-            "conversation_id": "conv-1",
-            "call_outcome": "completed",
-            "duration_seconds": 48,
-            "cost_breakdown": {"telephony": 0.1, "llm": 0.2, "tts": 0.3, "stt": 0.4},
+            "type": "post_call_transcription",
+            "event_timestamp": 1739537297,
+            "data": {
+                "conversation_id": "conv-1",
+                "metadata": {
+                    "call_duration_secs": 48,
+                    "cost": 100,
+                    "start_time_unix_secs": 1739537297,
+                },
+                "analysis": {
+                    "call_successful": "success",
+                    "transcript_summary": "Booked a follow-up",
+                },
+                "transcript": [
+                    {"role": "agent", "message": "Hello", "time_in_call_secs": 0},
+                    {"role": "user", "message": "Hi", "time_in_call_secs": 2},
+                ],
+            },
         },
     )
 
     assert call.status == CallStatus.completed
+    assert call.outcome == "success"
+    assert call.duration_seconds == 48
+    assert call.summary == "Booked a follow-up"
+    assert call.cost_telephony_cents == 100
     assert contact.status == ContactStatus.called
+    assert contact.next_retry_at is None
+    assert contact.retry_count == 0
     assert campaign.contacts_called == 3
     assert campaign.contacts_remaining == 4
     assert campaign.calls_successful == 2
+    assert campaign.calls_failed == 0
     assert campaign.total_spend_cents == 125
+    enqueue_mock.assert_awaited_once()
 
 
 @pytest.mark.asyncio
-async def test_handle_call_ended_retries_retryable_outcome():
-    campaign = Campaign(
-        id=uuid4(),
-        contacts_called=0,
-        contacts_remaining=4,
-        calls_successful=0,
-        calls_failed=0,
-        total_spend_cents=0,
-        retry_on_outcomes=[RetryOnOutcome.no_answer],
-        max_retries=3,
-        retry_delay_minutes=15,
-    )
-    contact = Contact(id=uuid4(), status=ContactStatus.calling, retry_count=0)
-    call = Call(
-        id=uuid4(),
-        campaign_id=campaign.id,
-        contact_id=contact.id,
-        status=CallStatus.in_progress,
-    )
-    call.contact = contact
-    call.campaign = campaign
+async def test_duplicate_post_call_transcription_is_idempotent(monkeypatch):
+    call, contact, campaign = _build_call_with_relations()
 
     db = AsyncMock()
-    db.execute.return_value = ScalarResult(call)
+    db.add = Mock()
+    db.execute.side_effect = [
+        ScalarResult(call),
+        None,
+        None,
+        None,
+        ScalarResult(call),
+        None,
+        None,
+        None,
+    ]
 
-    await handle_call_ended(
+    enqueue_mock = AsyncMock()
+    monkeypatch.setattr(
+        "app.services.webhook_handler.enqueue_webhook_delivery",
+        enqueue_mock,
+    )
+
+    payload = {
+        "type": "post_call_transcription",
+        "event_timestamp": 1739537297,
+        "data": {
+            "conversation_id": "conv-1",
+            "metadata": {
+                "call_duration_secs": 48,
+                "cost": 100,
+                "start_time_unix_secs": 1739537297,
+            },
+            "analysis": {
+                "call_successful": "success",
+                "transcript_summary": "Booked a follow-up",
+            },
+            "transcript": [
+                {"role": "agent", "message": "Hello", "time_in_call_secs": 0},
+                {"role": "user", "message": "Hi", "time_in_call_secs": 2},
+            ],
+        },
+    }
+
+    await handle_post_call_transcription(db, payload)
+    first_snapshot = (
+        campaign.contacts_called,
+        campaign.contacts_remaining,
+        campaign.calls_successful,
+        campaign.calls_failed,
+        campaign.total_spend_cents,
+        contact.retry_count,
+    )
+
+    await handle_post_call_transcription(db, payload)
+    second_snapshot = (
+        campaign.contacts_called,
+        campaign.contacts_remaining,
+        campaign.calls_successful,
+        campaign.calls_failed,
+        campaign.total_spend_cents,
+        contact.retry_count,
+    )
+
+    assert second_snapshot == first_snapshot
+    enqueue_mock.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_call_initiation_failure_requeues_retryable_contact(monkeypatch):
+    call, contact, campaign = _build_call_with_relations(
+        campaign_kwargs={
+            "contacts_called": 1,
+            "contacts_remaining": 3,
+            "calls_successful": 0,
+            "calls_failed": 0,
+            "total_spend_cents": 0,
+            "retry_on_outcomes": [RetryOnOutcome.no_answer],
+        },
+        call_kwargs={"status": CallStatus.ringing},
+    )
+
+    db = AsyncMock()
+    db.add = Mock()
+    db.execute.side_effect = [ScalarResult(call)]
+
+    enqueue_mock = AsyncMock()
+    monkeypatch.setattr(
+        "app.services.webhook_handler.enqueue_webhook_delivery",
+        enqueue_mock,
+    )
+
+    await handle_call_initiation_failure(
         db,
         {
-            "conversation_id": "conv-2",
-            "call_outcome": "no_answer",
-            "duration_seconds": 12,
+            "type": "call_initiation_failure",
+            "event_timestamp": 1759931652,
+            "data": {
+                "conversation_id": "conv-2",
+                "failure_reason": "no-answer",
+                "metadata": {"type": "twilio", "body": {}},
+            },
         },
     )
 
     assert call.status == CallStatus.no_answer
-    assert contact.status == ContactStatus.pending
-    assert contact.retry_count == 1
-    assert contact.next_retry_at is not None
-    assert campaign.contacts_called == 0
-    assert campaign.contacts_remaining == 4
-
-
-@pytest.mark.asyncio
-async def test_handle_call_failed_requeues_retryable_contact():
-    campaign = Campaign(
-        id=uuid4(),
-        contacts_called=1,
-        contacts_remaining=3,
-        calls_successful=0,
-        calls_failed=0,
-        total_spend_cents=0,
-        max_retries=3,
-        retry_delay_minutes=20,
-    )
-    contact = Contact(id=uuid4(), status=ContactStatus.calling, retry_count=0)
-    call = Call(
-        id=uuid4(),
-        campaign_id=campaign.id,
-        contact_id=contact.id,
-        status=CallStatus.ringing,
-    )
-    call.contact = contact
-    call.campaign = campaign
-
-    db = AsyncMock()
-    db.execute.return_value = ScalarResult(call)
-
-    await handle_call_failed(
-        db,
-        {"conversation_id": "conv-3", "error_code": "provider_error", "error_message": "boom"},
-    )
-
-    assert call.status == CallStatus.failed
+    assert call.outcome == "no_answer"
     assert contact.status == ContactStatus.pending
     assert contact.retry_count == 1
     assert contact.next_retry_at is not None
     assert campaign.calls_failed == 1
     assert campaign.contacts_called == 1
     assert campaign.contacts_remaining == 3
+    enqueue_mock.assert_awaited_once()
 
 
 @pytest.mark.asyncio
-async def test_handle_call_failed_marks_terminal_failure_when_retries_exhausted():
-    campaign = Campaign(
-        id=uuid4(),
-        contacts_called=1,
-        contacts_remaining=3,
-        calls_successful=0,
-        calls_failed=0,
-        total_spend_cents=0,
-        max_retries=3,
-        retry_delay_minutes=20,
+async def test_call_initiation_failure_marks_contact_failed_when_retries_exhausted(monkeypatch):
+    call, contact, campaign = _build_call_with_relations(
+        campaign_kwargs={
+            "contacts_called": 1,
+            "contacts_remaining": 3,
+            "calls_successful": 0,
+            "calls_failed": 0,
+            "total_spend_cents": 0,
+            "retry_on_outcomes": [RetryOnOutcome.no_answer],
+            "max_retries": 3,
+        },
+        contact_kwargs={"retry_count": 3},
+        call_kwargs={"status": CallStatus.ringing, "retry_number": 3},
     )
-    contact = Contact(id=uuid4(), status=ContactStatus.calling, retry_count=3)
-    call = Call(
-        id=uuid4(),
-        campaign_id=campaign.id,
-        contact_id=contact.id,
-        status=CallStatus.ringing,
-    )
-    call.contact = contact
-    call.campaign = campaign
 
     db = AsyncMock()
-    db.execute.return_value = ScalarResult(call)
+    db.add = Mock()
+    db.execute.side_effect = [ScalarResult(call)]
 
-    await handle_call_failed(
-        db,
-        {"conversation_id": "conv-4", "error_code": "provider_error", "error_message": "boom"},
+    enqueue_mock = AsyncMock()
+    monkeypatch.setattr(
+        "app.services.webhook_handler.enqueue_webhook_delivery",
+        enqueue_mock,
     )
 
+    await handle_call_initiation_failure(
+        db,
+        {
+            "type": "call_initiation_failure",
+            "event_timestamp": 1759931652,
+            "data": {
+                "conversation_id": "conv-3",
+                "failure_reason": "no-answer",
+                "metadata": {"type": "twilio", "body": {}},
+            },
+        },
+    )
+
+    assert call.status == CallStatus.no_answer
     assert contact.status == ContactStatus.failed
-    assert contact.next_retry_at is None
     assert contact.retry_count == 4
+    assert contact.next_retry_at is None
     assert campaign.calls_failed == 1
     assert campaign.contacts_called == 2
     assert campaign.contacts_remaining == 2
+    enqueue_mock.assert_awaited_once()
 
 
-@pytest.mark.asyncio
-async def test_duplicate_terminal_webhook_is_ignored():
-    campaign = Campaign(
-        id=uuid4(),
-        contacts_called=2,
-        contacts_remaining=1,
-        calls_successful=1,
-        calls_failed=1,
-        total_spend_cents=50,
-        max_retries=3,
-        retry_delay_minutes=20,
-    )
-    contact = Contact(id=uuid4(), status=ContactStatus.called, retry_count=0)
-    call = Call(
-        id=uuid4(),
-        campaign_id=campaign.id,
-        contact_id=contact.id,
-        status=CallStatus.completed,
-    )
-    call.contact = contact
-    call.campaign = campaign
+def test_verify_elevenlabs_signature_uses_timestamped_header():
+    secret = "top-secret"
+    body = b'{"type":"post_call_transcription"}'
+    timestamp = int(time.time())
+    signed_payload = f"{timestamp}.{body.decode('utf-8')}".encode("utf-8")
+    digest = hmac.new(secret.encode("utf-8"), signed_payload, hashlib.sha256).hexdigest()
+    header = f"t={timestamp},v0={digest}"
 
-    db = AsyncMock()
-    db.execute.return_value = ScalarResult(call)
-
-    await handle_call_ended(db, {"conversation_id": "conv-5", "call_outcome": "completed"})
-
-    assert campaign.contacts_called == 2
-    assert campaign.contacts_remaining == 1
-    assert campaign.calls_successful == 1
+    assert verify_elevenlabs_signature(body, header, secret) is True
+    assert verify_elevenlabs_signature(b'{"type":"tampered"}', header, secret) is False

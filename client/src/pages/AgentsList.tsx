@@ -13,10 +13,12 @@ interface AgentListItem {
   name: string;
   status: "draft" | "live" | "paused" | "archived";
   llm_model: string;
-  total_calls: number;
   success_rate: number | null;
   active_campaign_id: string | null;
   active_campaign_name: string | null;
+  assigned_campaign_id: string | null;
+  assigned_campaign_name: string | null;
+  assigned_campaign_status: "draft" | "scheduled" | "live" | "paused" | "completed" | "archived" | null;
   created_at: string;
 }
 
@@ -52,20 +54,27 @@ export default function AgentsList() {
       key: "assignment", 
       label: "Assignment", 
       hideOnMobile: true, 
-      render: (r) => (
-        r.active_campaign_name
-          ? <Badge variant="outline" className="text-[10px] font-medium bg-primary/5 text-primary border-primary/20">
-              Active in {r.active_campaign_name}
-            </Badge>
-          : <span className="text-xs text-muted-foreground italic">Available</span>
-      )
-    },
-    { 
-      key: "total_calls", 
-      label: "Total Calls", 
-      sortable: true, 
-      hideOnMobile: true, 
-      render: (r) => <span className="text-sm">{r.total_calls}</span> 
+      render: (r) => {
+        const isActiveAssignment =
+          r.assigned_campaign_status === "live" || r.assigned_campaign_status === "scheduled";
+
+        if (!r.assigned_campaign_name) {
+          return <span className="text-xs text-muted-foreground italic">Available</span>;
+        }
+
+        return (
+          <Badge
+            variant="outline"
+            className={
+              isActiveAssignment
+                ? "text-[10px] font-medium bg-primary/5 text-primary border-primary/20"
+                : "text-[10px] font-medium bg-background text-foreground border-border"
+            }
+          >
+            {r.assigned_campaign_name}
+          </Badge>
+        );
+      }
     },
     { 
       key: "success_rate", 

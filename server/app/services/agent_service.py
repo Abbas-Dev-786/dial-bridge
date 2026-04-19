@@ -6,12 +6,15 @@ from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.models.agent import Agent, AgentVoiceConfig, AgentConversationConfig, AgentTool
+from app.models.campaign import Campaign
 from app.models.workspace import Workspace
 from app.models.user import User
 from app.schemas.agent import AgentCreate, AgentUpdate, VoiceConfigCreate, ConversationConfigCreate, AgentToolCreate
-from app.enums import AgentStatus, ToolType
+from app.enums import AgentStatus, CampaignStatus, ToolType
 from app.exceptions import NotFoundError, ConflictError
 from app.utils.audit import log_action
+
+ACTIVE_CAMPAIGN_STATUSES = {CampaignStatus.live, CampaignStatus.scheduled}
 
 def build_elevenlabs_agent_payload(
     agent: Agent,
@@ -98,7 +101,17 @@ async def get_active_campaign(db: AsyncSession, agent: Agent):
     Query campaigns where agent_id = agent.id AND status IN ('live','scheduled') AND deleted_at IS NULL
     Returns None if agent is free.
     """
-    return None
+    stmt = (
+        select(Campaign)
+        .where(
+            Campaign.agent_id == agent.id,
+            Campaign.deleted_at.is_(None),
+            Campaign.status.in_(list(ACTIVE_CAMPAIGN_STATUSES)),
+        )
+        .order_by(Campaign.updated_at.desc(), Campaign.created_at.desc())
+    )
+    result = await db.execute(stmt)
+    return result.scalars().first()
 
 async def create_agent(db: AsyncSession, workspace: Workspace, user: User, data: AgentCreate) -> Agent:
     # 1. Create Agent row in DB
@@ -208,6 +221,7 @@ async def get_agent(db: AsyncSession, workspace_id: UUID, agent_id: UUID) -> Age
     agent = result.scalar_one_or_none()
     if not agent:
         raise NotFoundError("Agent", str(agent_id))
+    await _attach_agent_assignment_fields(db, [agent])
     return agent
 
 async def list_agents(db: AsyncSession, workspace_id: UUID) -> list[Agent]:
@@ -220,7 +234,9 @@ async def list_agents(db: AsyncSession, workspace_id: UUID) -> list[Agent]:
         .order_by(Agent.created_at.desc())
     )
     result = await db.execute(stmt)
-    return list(result.scalars().all())
+    agents = list(result.scalars().all())
+    await _attach_agent_assignment_fields(db, agents)
+    return agents
 
 async def update_agent(db: AsyncSession, workspace: Workspace, agent: Agent, data: AgentUpdate) -> Agent:
     campaign = await get_active_campaign(db, agent)
@@ -437,3 +453,69 @@ async def delete_agent(db: AsyncSession, workspace: Workspace, agent: Agent) -> 
     )
     
     await db.commit()
+
+
+async def _attach_agent_assignment_fields(
+    db: AsyncSession,
+    agents: list[Agent],
+) -> None:
+    if not agents:
+        return
+
+    agent_ids = [agent.id for agent in agents]
+    campaigns_result = await db.execute(
+        select(Campaign)
+        .where(Campaign.agent_id.in_(agent_ids))
+        .order_by(Campaign.updated_at.desc(), Campaign.created_at.desc())
+    )
+    campaigns = list(campaigns_result.scalars().all())
+
+    campaigns_by_agent: dict[UUID, list[Campaign]] = {}
+    for campaign in campaigns:
+        if campaign.agent_id is None:
+            continue
+        campaigns_by_agent.setdefault(campaign.agent_id, []).append(campaign)
+
+    for agent in agents:
+        active_campaign, assigned_campaign = _resolve_agent_campaign_assignment(
+            campaigns_by_agent.get(agent.id, [])
+        )
+        agent.active_campaign_id = active_campaign.id if active_campaign else None
+        agent.active_campaign_name = active_campaign.name if active_campaign else None
+        agent.assigned_campaign_id = assigned_campaign.id if assigned_campaign else None
+        agent.assigned_campaign_name = assigned_campaign.name if assigned_campaign else None
+        agent.assigned_campaign_status = assigned_campaign.status if assigned_campaign else None
+
+
+def _resolve_agent_campaign_assignment(
+    campaigns: list[Campaign],
+) -> tuple[Campaign | None, Campaign | None]:
+    visible_campaigns = [campaign for campaign in campaigns if campaign.deleted_at is None]
+    if not visible_campaigns:
+        return None, None
+
+    ordered_campaigns = sorted(
+        visible_campaigns,
+        key=lambda campaign: (
+            _campaign_datetime_value(campaign.updated_at or campaign.created_at),
+            _campaign_datetime_value(campaign.created_at),
+        ),
+        reverse=True,
+    )
+
+    active_campaign = next(
+        (
+            campaign
+            for campaign in ordered_campaigns
+            if campaign.status in ACTIVE_CAMPAIGN_STATUSES
+        ),
+        None,
+    )
+    assigned_campaign = active_campaign or ordered_campaigns[0]
+    return active_campaign, assigned_campaign
+
+
+def _campaign_datetime_value(value: datetime | None) -> float:
+    if value is None:
+        return float("-inf")
+    return value.timestamp()

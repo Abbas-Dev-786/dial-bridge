@@ -9,12 +9,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  ChevronDown,
-  ChevronRight,
   Loader2,
   History,
   User as UserIcon,
-  Calendar,
 } from "lucide-react";
 import { useAuditLogsQuery, useMembersQuery } from "@/hooks/api/useSettings";
 import { format, subDays } from "date-fns";
@@ -28,7 +25,6 @@ interface AuditLog {
   actor_type: string;
   action: string;
   resource_type: string;
-  resource_id: string | null;
   diff: any;
   created_at: string;
 }
@@ -134,16 +130,6 @@ export default function AuditLogs() {
         >
           {r.resource_type.replace("_", " ")}
         </Badge>
-      ),
-    },
-    {
-      key: "resource_id",
-      label: "ID",
-      hideOnMobile: true,
-      render: (r) => (
-        <span className="text-[10px] font-mono text-muted-foreground opacity-40 select-all">
-          {r.resource_id}
-        </span>
       ),
     },
   ];

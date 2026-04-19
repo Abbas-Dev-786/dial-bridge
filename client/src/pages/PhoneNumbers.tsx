@@ -145,6 +145,11 @@ export default function PhoneNumbers() {
     }
   ], []);
 
+  const providerSpecificColumns = useMemo(
+    () => columns.filter((column) => column.key !== "provider"),
+    [columns],
+  );
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -186,15 +191,15 @@ export default function PhoneNumbers() {
         </TabsContent>
 
         <TabsContent value="elevenlabs" className="mt-4">
-          <DataTable columns={columns} data={numbers.filter((n) => n.provider === "elevenlabs")} searchKey="number" searchPlaceholder="Search ElevenLabs numbers..." />
+          <DataTable columns={providerSpecificColumns} data={numbers.filter((n) => n.provider === "elevenlabs")} searchKey="number" searchPlaceholder="Search ElevenLabs numbers..." />
         </TabsContent>
 
         <TabsContent value="twilio" className="mt-4">
-          <DataTable columns={columns} data={numbers.filter((n) => n.provider === "twilio")} searchKey="number" searchPlaceholder="Search Twilio numbers..." />
+          <DataTable columns={providerSpecificColumns} data={numbers.filter((n) => n.provider === "twilio")} searchKey="number" searchPlaceholder="Search Twilio numbers..." />
         </TabsContent>
 
         <TabsContent value="sip" className="mt-4">
-          <DataTable columns={columns} data={numbers.filter((n) => n.provider === "sip_trunk")} searchKey="number" searchPlaceholder="Search SIP trunks..." />
+          <DataTable columns={providerSpecificColumns} data={numbers.filter((n) => n.provider === "sip_trunk")} searchKey="number" searchPlaceholder="Search SIP trunks..." />
         </TabsContent>
       </Tabs>
 

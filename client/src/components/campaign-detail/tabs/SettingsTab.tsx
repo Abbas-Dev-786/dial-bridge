@@ -138,7 +138,7 @@ export function SettingsTab() {
         </div>
         <Button 
           onClick={handleSave} 
-          disabled={updateCampaign.isPending || isLive}
+          disabled={updateCampaign.isPending}
           size="lg"
           className="min-w-[140px]"
         >
@@ -151,10 +151,10 @@ export function SettingsTab() {
       </div>
 
       {isLive && (
-        <div className="p-4 rounded-lg bg-yellow-50 border border-yellow-200 flex gap-3 items-center text-yellow-800">
-          <AlertTriangle className="h-5 w-5 shrink-0" />
+        <div className="p-4 rounded-lg bg-emerald-50 border border-emerald-200 flex gap-3 items-center text-emerald-800">
+          <Zap className="h-5 w-5 shrink-0" />
           <p className="text-sm font-medium">
-            Campaign is currently LIVE. Please pause the campaign to modify its configuration.
+            Campaign is LIVE. Any changes you save here will be applied immediately to the dialer!
           </p>
         </div>
       )}
@@ -182,7 +182,6 @@ export function SettingsTab() {
                   value={formData.name} 
                   onChange={e => setFormData({ ...formData, name: e.target.value })}
                   placeholder="e.g. Q4 Sales Outreach"
-                  disabled={isLive}
                 />
               </div>
               <div className="space-y-2">
@@ -192,7 +191,6 @@ export function SettingsTab() {
                   value={formData.caller_id_display_name} 
                   onChange={e => setFormData({ ...formData, caller_id_display_name: e.target.value })}
                   placeholder="e.g. Acme Corp"
-                  disabled={isLive}
                 />
               </div>
             </div>
@@ -204,7 +202,6 @@ export function SettingsTab() {
                 value={formData.goal_description} 
                 onChange={e => setFormData({ ...formData, goal_description: e.target.value })}
                 placeholder="Describe what the agent should achieve..."
-                disabled={isLive}
               />
               <div className="flex gap-1.5 items-start mt-1.5 p-2 rounded bg-muted/50 text-[10px] text-muted-foreground italic">
                 <Info className="h-3 w-3 shrink-0 mt-0.5" />
@@ -235,7 +232,6 @@ export function SettingsTab() {
               <Select 
                 value={formData.timezone} 
                 onValueChange={v => setFormData({ ...formData, timezone: v })}
-                disabled={isLive}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Select timezone" />
@@ -255,7 +251,6 @@ export function SettingsTab() {
                 value={formData.schedule_days} 
                 onValueChange={v => v?.length > 0 && setFormData({ ...formData, schedule_days: v })}
                 className="justify-start flex-wrap gap-2"
-                disabled={isLive}
               >
                 {DAYS_OF_WEEK.map(day => (
                   <ToggleGroupItem 
@@ -276,7 +271,6 @@ export function SettingsTab() {
                   type="time" 
                   value={formData.schedule_start_time} 
                   onChange={e => setFormData({ ...formData, schedule_start_time: e.target.value })}
-                  disabled={isLive}
                 />
               </div>
               <div className="space-y-2">
@@ -285,7 +279,6 @@ export function SettingsTab() {
                   type="time" 
                   value={formData.schedule_end_time} 
                   onChange={e => setFormData({ ...formData, schedule_end_time: e.target.value })}
-                  disabled={isLive}
                 />
               </div>
             </div>
@@ -299,7 +292,6 @@ export function SettingsTab() {
                   type="date" 
                   value={formData.start_date || ""} 
                   onChange={e => setFormData({ ...formData, start_date: e.target.value || null })}
-                  disabled={isLive}
                 />
               </div>
               <div className="space-y-2">
@@ -310,7 +302,6 @@ export function SettingsTab() {
                   type="date" 
                   value={formData.end_date || ""} 
                   onChange={e => setFormData({ ...formData, end_date: e.target.value || null })}
-                  disabled={isLive}
                 />
               </div>
             </div>
@@ -342,7 +333,6 @@ export function SettingsTab() {
                 max={100}
                 value={formData.max_concurrency} 
                 onChange={e => setFormData({ ...formData, max_concurrency: parseInt(e.target.value) })}
-                disabled={isLive}
               />
               <p className="text-[10px] text-muted-foreground">Number of simultaneous outbound calls.</p>
             </div>
@@ -356,7 +346,6 @@ export function SettingsTab() {
                 <Switch 
                   checked={formData.record_calls} 
                   onCheckedChange={v => setFormData({ ...formData, record_calls: v })}
-                  disabled={isLive}
                 />
               </div>
 
@@ -368,7 +357,6 @@ export function SettingsTab() {
                 <Switch 
                   checked={formData.voicemail_detection} 
                   onCheckedChange={v => setFormData({ ...formData, voicemail_detection: v })}
-                  disabled={isLive}
                 />
               </div>
 
@@ -380,7 +368,6 @@ export function SettingsTab() {
                 <Switch 
                   checked={formData.leave_voicemail} 
                   onCheckedChange={v => setFormData({ ...formData, leave_voicemail: v })}
-                  disabled={isLive}
                 />
               </div>
             </div>
@@ -410,7 +397,6 @@ export function SettingsTab() {
                   max={10}
                   value={formData.max_retries} 
                   onChange={e => setFormData({ ...formData, max_retries: parseInt(e.target.value) })}
-                  disabled={isLive}
                 />
               </div>
               <div className="space-y-2">
@@ -420,7 +406,6 @@ export function SettingsTab() {
                   min={1} 
                   value={formData.retry_delay_minutes} 
                   onChange={e => setFormData({ ...formData, retry_delay_minutes: parseInt(e.target.value) })}
-                  disabled={isLive}
                 />
               </div>
             </div>
@@ -441,7 +426,6 @@ export function SettingsTab() {
                           setFormData({ ...formData, retry_on_outcomes: current.filter(v => v !== outcome.value) });
                         }
                       }}
-                      disabled={isLive}
                     />
                     <label 
                       htmlFor={`retry-${outcome.value}`}
@@ -478,7 +462,6 @@ export function SettingsTab() {
               <Switch 
                 checked={formData.dnc_check_enabled} 
                 onCheckedChange={v => setFormData({ ...formData, dnc_check_enabled: v })}
-                disabled={isLive}
               />
             </div>
 
@@ -490,7 +473,6 @@ export function SettingsTab() {
               <Switch 
                 checked={formData.tcpa_mode} 
                 onCheckedChange={v => setFormData({ ...formData, tcpa_mode: v })}
-                disabled={isLive}
               />
             </div>
 

@@ -150,17 +150,8 @@ async def list_campaigns(db: AsyncSession, workspace_id: uuid.UUID, status: Camp
     return campaigns
 
 async def update_campaign(db: AsyncSession, campaign: Campaign, data: CampaignUpdate) -> Campaign:
-    live_blocked_fields = [
-        "schedule_days", "schedule_start_time", "schedule_end_time", 
-        "start_date", "max_concurrency", "max_retries", 
-        "retry_delay_minutes", "retry_on_outcomes"
-    ]
-    
     update_data = data.model_dump(exclude_none=True)
-    if campaign.status == CampaignStatus.live:
-        for field in live_blocked_fields:
-            if field in update_data:
-                raise ConflictError(f"Cannot change {field} while campaign is live. Pause it first.")
+
     
     for key, value in update_data.items():
         if key == "schedule_start_time" and isinstance(value, str):

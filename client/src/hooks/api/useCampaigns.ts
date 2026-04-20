@@ -13,6 +13,23 @@ export interface ImproveGoalResponse {
 export interface CampaignSummary {
   id: string;
   name: string;
+  goal_description?: string;
+  caller_id_display_name?: string;
+  timezone?: string;
+  schedule_days?: string[];
+  schedule_start_time?: string;
+  schedule_end_time?: string;
+  start_date?: string | null;
+  end_date?: string | null;
+  max_concurrency?: number;
+  max_retries?: number;
+  retry_delay_minutes?: number;
+  retry_on_outcomes?: string[];
+  dnc_check_enabled?: boolean;
+  record_calls?: boolean;
+  tcpa_mode?: boolean;
+  voicemail_detection?: boolean;
+  leave_voicemail?: boolean;
   status: CampaignStatus;
   agent_name: string | null;
   phone_number: string | null;

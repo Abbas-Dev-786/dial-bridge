@@ -23,7 +23,7 @@ class CampaignCreate(BaseModel):
     schedule_end_time: str = "17:00"
     start_date: date | None = None
     end_date: date | None = None
-    max_concurrency: int = 5
+    max_concurrency: int = 1
     max_retries: int = 3
     retry_delay_minutes: int = 30
     retry_on_outcomes: list[RetryOnOutcome] = [

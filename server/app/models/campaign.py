@@ -6,6 +6,16 @@ from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.sql.expression import text
 
 from app.models import AppBase
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from app.models.workspace import Workspace
+    from app.models.agent import Agent
+    from app.models.phone_number import PhoneNumber
+    from app.models.knowledge import KnowledgeDocument, CampaignKBSnapshot
+    from app.models.contact import Contact
+    from app.models.call import Call
+    from app.models.integration import CampaignIntegration
 from app.enums import (
     CampaignStatus, 
     KBSyncStatus, 
@@ -49,7 +59,7 @@ class Campaign(AppBase):
     start_date: Mapped[date | None] = mapped_column(Date)
     end_date: Mapped[date | None] = mapped_column(Date)
     
-    max_concurrency: Mapped[int] = mapped_column(Integer, default=5)
+    max_concurrency: Mapped[int] = mapped_column(Integer, default=1)
     max_retries: Mapped[int] = mapped_column(Integer, default=3)
     retry_delay_minutes: Mapped[int] = mapped_column(Integer, default=30)
     retry_on_outcomes: Mapped[list[RetryOnOutcome]] = mapped_column(

@@ -33,9 +33,13 @@ export const useWorkspaceStore = create<WorkspaceState>()(
           const response = await api.get("/api/v1/workspaces");
           set({ workspaces: response.data });
           
-          // Set default workspace if none active
-          if (!get().activeWorkspaceId && response.data.length > 0) {
-            set({ activeWorkspaceId: response.data[0].id });
+          // Validate existing activeWorkspaceId or set default
+          const fetchedWorkspaces = response.data;
+          const currentActive = get().activeWorkspaceId;
+          const isValid = currentActive && fetchedWorkspaces.some((w: Workspace) => w.id === currentActive);
+          
+          if (!isValid) {
+            set({ activeWorkspaceId: fetchedWorkspaces.length > 0 ? fetchedWorkspaces[0].id : null });
           }
         } catch (error) {
           console.error("Failed to fetch workspaces:", error);

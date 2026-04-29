@@ -93,10 +93,10 @@ export const setupInterceptors = (
         }
       }
 
-      // Handle 403 (Forbidden) - Logout immediately
-      if (error.response?.status === 403) {
-        onLogout();
-      }
+      // Handle 403 (Forbidden) - Let the UI handle it instead of forcing a logout
+      // if (error.response?.status === 403) {
+      //   onLogout();
+      // }
 
       return Promise.reject(error);
     }

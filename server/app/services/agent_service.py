@@ -10,11 +10,29 @@ from app.models.campaign import Campaign
 from app.models.workspace import Workspace
 from app.models.user import User
 from app.schemas.agent import AgentCreate, AgentUpdate, VoiceConfigCreate, ConversationConfigCreate, AgentToolCreate
-from app.enums import AgentStatus, CampaignStatus, ToolType
+from app.enums import AgentStatus, CampaignStatus, InterruptionSensitivity, ToolType
 from app.exceptions import NotFoundError, ConflictError
 from app.utils.audit import log_action
 
 ACTIVE_CAMPAIGN_STATUSES = {CampaignStatus.live, CampaignStatus.scheduled}
+
+
+def _map_turn_endpoint_delay_to_eagerness(delay_ms: int | None) -> str:
+    if delay_ms is None:
+        return "normal"
+    if delay_ms <= 350:
+        return "eager"
+    if delay_ms >= 800:
+        return "patient"
+    return "normal"
+
+
+def _build_client_events(conversation_config: AgentConversationConfig) -> list[str]:
+    events = ["audio"]
+    if conversation_config.interruption_sensitivity != InterruptionSensitivity.low:
+        events.append("interruption")
+    return events
+
 
 def build_elevenlabs_agent_payload(
     agent: Agent,
@@ -58,11 +76,15 @@ def build_elevenlabs_agent_payload(
                 "speed": float(voice_config.speed) / 100,
             },
             "turn": {
-                "turn_timeout": conversation_config.end_call_after_silence_secs,
                 "mode": "turn",
+                "silence_end_call_timeout": conversation_config.end_call_after_silence_secs,
+                "turn_eagerness": _map_turn_endpoint_delay_to_eagerness(
+                    conversation_config.turn_endpoint_delay_ms
+                ),
             },
             "conversation": {
                 "max_duration_seconds": conversation_config.max_duration_seconds,
+                "client_events": _build_client_events(conversation_config),
             },
             "post_call_webhook_url": f"{settings.base_url}/api/v1/webhooks/elevenlabs/post-call",
             "conversation_initiation_url": f"{settings.base_url}/api/v1/webhooks/elevenlabs/initiation",
@@ -243,8 +265,41 @@ async def update_agent(db: AsyncSession, workspace: Workspace, agent: Agent, dat
     if campaign:
         raise ConflictError(f"Cannot edit agent while it is active in '{campaign.name}'. Pause the campaign first.")
 
-    for field, value in data.model_dump(exclude_unset=True).items():
+    update_data = data.model_dump(
+        exclude_unset=True,
+        exclude={"voice_config", "conversation_config", "tools"},
+    )
+    for field, value in update_data.items():
         setattr(agent, field, value)
+
+    if data.voice_config is not None:
+        if agent.voice_config is None:
+            agent.voice_config = AgentVoiceConfig(agent_id=agent.id, voice_id=data.voice_config.voice_id)
+        for field, value in data.voice_config.model_dump().items():
+            setattr(agent.voice_config, field, value)
+
+    if data.conversation_config is not None:
+        if agent.conversation_config is None:
+            agent.conversation_config = AgentConversationConfig(agent_id=agent.id)
+        for field, value in data.conversation_config.model_dump().items():
+            setattr(agent.conversation_config, field, value)
+
+    if data.tools is not None:
+        agent.tools.clear()
+        await db.flush()
+        for tool_data in data.tools:
+            agent.tools.append(
+                AgentTool(
+                    agent_id=agent.id,
+                    tool_type=tool_data.tool_type,
+                    name=tool_data.name,
+                    description=tool_data.description,
+                    is_enabled=tool_data.is_enabled,
+                    url=tool_data.url,
+                    http_method=tool_data.http_method,
+                    headers=tool_data.headers,
+                )
+            )
 
     await db.flush()
     

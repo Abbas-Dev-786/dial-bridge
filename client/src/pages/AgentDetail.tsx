@@ -112,11 +112,11 @@ export default function AgentDetail() {
           endCallAfterSilence: (
             c?.end_call_after_silence_secs || 30
           ).toString(),
-          interruption_sensitivity: c?.interruption_sensitivity || "medium",
-          turn_endpoint_delay_ms: (c?.turn_endpoint_delay_ms || 500).toString(),
-          enable_backchannel: c?.enable_backchannel ?? true,
-          enable_data_collection: c?.enable_data_collection ?? false,
-          data_collection_fields: JSON.stringify(
+          interruptionSensitivity: c?.interruption_sensitivity || "medium",
+          turnEndpointDelay: (c?.turn_endpoint_delay_ms || 500).toString(),
+          enableBackchannel: c?.enable_backchannel ?? true,
+          enableDataCollection: c?.enable_data_collection ?? false,
+          dataCollectionFields: JSON.stringify(
             c?.data_collection_fields || [],
             null,
             2,
@@ -144,7 +144,7 @@ export default function AgentDetail() {
       name: agentData.name,
       llm_model: agentData.llm_model,
       system_prompt: agentData.system_prompt,
-      first_message: agentData.voice.firstMessage || agentData.flow.firstMessage,
+      first_message: agentData.flow.firstMessage,
       temperature: agentData.temperature,
       max_tokens: agentData.max_tokens,
       voice_config: {

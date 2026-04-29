@@ -51,11 +51,14 @@ async def feed_campaign_contacts(self, campaign_id: str):
             await _reschedule_feeder(db, campaign, delay=60)
             return
 
-        # 3. Count active calls
-        active_stmt = select(func.count(Call.id)).where(
+        # 3. Count reserved contact slots.
+        # We use contact status instead of Call rows so the feeder respects
+        # capacity even while dispatch tasks are still queued or waiting on
+        # the provider to acknowledge call creation.
+        active_stmt = select(func.count(Contact.id)).where(
             and_(
-                Call.campaign_id == campaign.id,
-                Call.status.in_([CallStatus.queued, CallStatus.ringing, CallStatus.in_progress])
+                Contact.campaign_id == campaign.id,
+                Contact.status == ContactStatus.calling,
             )
         )
         result = await db.execute(active_stmt)

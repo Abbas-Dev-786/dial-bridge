@@ -78,12 +78,16 @@ class AgentCreate(BaseModel):
 class AgentUpdate(BaseModel):
     name: str | None = None
     description: str | None = None
+    llm_provider: LLMProvider | None = None
     llm_model: str | None = None
     llm_custom_endpoint: str | None = None
     system_prompt: str | None = None
     first_message: str | None = None
     temperature: float | None = None
     max_tokens: int | None = None
+    voice_config: VoiceConfigCreate | None = None
+    conversation_config: ConversationConfigCreate | None = None
+    tools: list[AgentToolCreate] | None = None
 
     @field_validator("system_prompt")
     @classmethod

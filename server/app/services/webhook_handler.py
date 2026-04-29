@@ -125,7 +125,17 @@ async def handle_initiation_webhook(db: AsyncSession, payload: dict) -> dict:
 
     call = await _get_call_by_conversation_id(db, conversation_id)
 
-    response_data: dict[str, Any] = {}
+    fallback_dynamic_vars, _ = build_dynamic_variables(
+        contact_name="there",
+        contact_phone=payload.get("caller_id") or payload.get("from_number") or "",
+        contact_company="",
+        campaign_name="",
+        custom_fields=None,
+    )
+    response_data: dict[str, Any] = {
+        "type": "conversation_initiation_client_data",
+        "dynamic_variables": fallback_dynamic_vars,
+    }
     if call:
         contact = call.contact
         campaign = call.campaign
@@ -146,7 +156,10 @@ async def handle_initiation_webhook(db: AsyncSession, payload: dict) -> dict:
                 campaign_name=campaign.name,
                 custom_fields=contact.custom_fields if contact else None,
             )
-            response_data = {"dynamic_variables": dynamic_vars}
+            response_data = {
+                "type": "conversation_initiation_client_data",
+                "dynamic_variables": dynamic_vars,
+            }
             logger.info(
                 "Prepared dynamic variables for initiation webhook "
                 "conversation_id=%s total_keys=%s custom_seen=%s custom_added=%s "

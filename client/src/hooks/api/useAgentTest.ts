@@ -6,6 +6,10 @@ export interface TestSessionResponse {
   token: string;
 }
 
+export interface TestSignedUrlResponse {
+  signed_url: string;
+}
+
 export interface TestConversationResponse {
   conversation_id: string;
   status: string;
@@ -27,6 +31,16 @@ export function useAgentTest(agentId?: string) {
       if (!activeWorkspaceId || !agentId) throw new Error("Missing workspace or agent ID");
       const { data } = await workspaceRequest.post<TestSessionResponse>(
         `/agents/${agentId}/test/session`
+      );
+      return data;
+    },
+  });
+
+  const startTestSignedUrlSession = useMutation({
+    mutationFn: async () => {
+      if (!activeWorkspaceId || !agentId) throw new Error("Missing workspace or agent ID");
+      const { data } = await workspaceRequest.post<TestSignedUrlResponse>(
+        `/agents/${agentId}/test/signed-url`
       );
       return data;
     },
@@ -55,6 +69,7 @@ export function useAgentTest(agentId?: string) {
 
   return {
     startTestSession,
+    startTestSignedUrlSession,
     useTestConversation,
   };
 }

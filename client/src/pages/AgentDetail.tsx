@@ -1,4 +1,4 @@
-import { useState, useEffect, lazy, Suspense } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import {
@@ -8,7 +8,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Drawer, DrawerContent, DrawerTitle } from "@/components/ui/drawer";
 import {
   Collapsible,
   CollapsibleContent,
@@ -31,12 +30,7 @@ import {
 } from "@/components/agent-detail/AgentConfigCard";
 import { useAgentDetailQuery, useAgentMutations, useVoicesQuery } from "@/hooks/api/useAgents";
 
-const VoicePlayground = lazy(() =>
-  import("@/components/VoicePlayground").then((module) => ({ default: module.VoicePlayground }))
-);
-const ConversationProvider = lazy(() =>
-  import("@elevenlabs/react").then((module) => ({ default: module.ConversationProvider }))
-);
+
 
 export default function AgentDetail() {
   const navigate = useNavigate();
@@ -44,7 +38,6 @@ export default function AgentDetail() {
   const { toast } = useToast();
 
   const [deleteOpen, setDeleteOpen] = useState(false);
-  const [drawerOpen, setDrawerOpen] = useState(false);
   const [voiceOpen, setVoiceOpen] = useState(false);
   const [conversationOpen, setConversationOpen] = useState(false);
   const [toolsOpen, setToolsOpen] = useState(false);
@@ -269,7 +262,7 @@ export default function AgentDetail() {
         id={id || ""}
         name={agentData.name}
         status={agent.status}
-        onTest={() => setDrawerOpen(true)}
+        onTest={() => navigate(`/agents/${id}/chat`)}
         onDelete={() => setDeleteOpen(true)}
       />
 
@@ -426,32 +419,7 @@ export default function AgentDetail() {
         </Button>
       </div>
 
-      {/* Voice Playground Drawer */}
-      <Drawer open={drawerOpen} onOpenChange={setDrawerOpen}>
-        <DrawerContent className="max-h-[85vh]">
-          <DrawerTitle className="sr-only">Voice Playground</DrawerTitle>
-          <div className="overflow-y-auto p-4 pb-8">
-            <Suspense
-              fallback={
-                <div className="flex min-h-[240px] items-center justify-center">
-                  <Loader2 className="h-6 w-6 animate-spin text-primary" />
-                </div>
-              }
-            >
-              <ConversationProvider>
-                <VoicePlayground
-                  voiceConfig={agentData.voice}
-                  onVoiceConfigChange={(v) => handleUpdate("voice", v)}
-                  voices={voices}
-                  agentName={agentData.name}
-                  agentId={id}
-                  isDirty={isDirty}
-                />
-              </ConversationProvider>
-            </Suspense>
-          </div>
-        </DrawerContent>
-      </Drawer>
+
 
       <DeleteConfirmDialog
         open={deleteOpen}

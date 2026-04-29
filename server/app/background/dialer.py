@@ -218,11 +218,12 @@ async def dispatch_call(self, campaign_id: str, contact_id: str):
                     "agent_phone_number_id": campaign.phone_number.elevenlabs_number_id,
                     "to_number": contact.phone,
                     "conversation_initiation_client_data": {
+                        "type": "conversation_initiation_client_data",
                         "dynamic_variables": dynamic_vars
                     }
                 }
                 if campaign.record_calls:
-                    payload["conversation_initiation_client_data"]["recording"] = {"enabled": True}
+                    payload["call_recording_enabled"] = True
 
                 response = await client.initiate_call(payload)
                 call.elevenlabs_conversation_id = response.get("conversation_id")

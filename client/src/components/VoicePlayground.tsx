@@ -73,7 +73,6 @@ export function VoicePlayground({
   const [previewPlaying, setPreviewPlaying] = useState(false);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [conversationId, setConversationId] = useState<string | null>(null);
-  const [isMuted, setIsMuted] = useState(false);
   const [textInput, setTextInput] = useState("");
 
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -93,7 +92,7 @@ export function VoicePlayground({
     onDisconnect: () => {
       console.log("Disconnected from ElevenLabs");
     },
-    onMessage: (message: { message: string; source: "ai" | "user" }) => {
+    onMessage: (message: any) => {
       setTranscript((prev) => [
         ...prev,
         {
@@ -103,12 +102,12 @@ export function VoicePlayground({
         },
       ]);
     },
-    onError: (error: string) => {
+    onError: (error: any) => {
       console.error("ElevenLabs Error:", error);
     },
   });
 
-  const { status: callStatus, isSpeaking } = conversation;
+  const { status: callStatus, isSpeaking, isMuted } = conversation;
 
   const voiceList = voices && voices.length > 0 ? voices : fallbackVoices;
 
@@ -177,11 +176,17 @@ export function VoicePlayground({
       // Request microphone permission and start session
       await navigator.mediaDevices.getUserMedia({ audio: true });
       
-      await conversation.startSession({
+      // startSession returns void in v1.0.3 — conversationId is
+      // retrieved via getId() once the connection is established
+      conversation.startSession({
         conversationToken: token,
       });
-      const convId = conversation.getId();
-      if (convId) setConversationId(convId);
+
+      // Get ID after session starts (may need slight delay for connection)
+      setTimeout(() => {
+        const convId = conversation.getId();
+        if (convId) setConversationId(convId);
+      }, 500);
     } catch (error) {
       console.error("Failed to start session:", error);
     }
@@ -191,27 +196,24 @@ export function VoicePlayground({
     await conversation.endSession();
   }, [conversation]);
 
-  const toggleMute = useCallback(async () => {
-    const newMuted = !isMuted;
-    await conversation.setVolume({ volume: newMuted ? 0 : 1 });
-    setIsMuted(newMuted);
+  const toggleMute = useCallback(() => {
+    conversation.setMuted(!isMuted);
   }, [conversation, isMuted]);
 
   const handleSendText = useCallback(async () => {
     if (!textInput.trim() || callStatus !== "connected") return;
-    // For V1, the fallback says "typed interaction allowed".
-    // ElevenLabs SDK doesn't directly support text injection in useConversation yet,
-    // but we can add it to the local transcript for UX.
-    setTranscript((prev) => [
-      ...prev,
-      {
-        role: "user",
-        text: textInput,
-        timestamp: formatTime(elapsed),
-      },
-    ]);
+    // Send the text message to the agent via the SDK
+    conversation.sendUserMessage(textInput);
     setTextInput("");
-  }, [textInput, callStatus, elapsed]);
+  }, [textInput, callStatus, conversation]);
+
+  // Prevent agent from interrupting while user is typing
+  const handleTextInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    setTextInput(e.target.value);
+    if (callStatus === "connected") {
+      conversation.sendUserActivity();
+    }
+  }, [callStatus, conversation]);
 
   const handlePreviewVoice = useCallback(() => {
     if (previewPlaying) {
@@ -591,7 +593,7 @@ export function VoicePlayground({
                 placeholder="Type a message..."
                 className="flex-1 bg-background border rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
                 value={textInput}
-                onChange={(e) => setTextInput(e.target.value)}
+                onChange={handleTextInputChange}
                 onKeyDown={(e) => e.key === "Enter" && handleSendText()}
               />
               <Button size="icon" variant="ghost" className="h-8 w-8" onClick={handleSendText}>

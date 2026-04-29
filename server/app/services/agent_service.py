@@ -28,7 +28,7 @@ def _map_turn_endpoint_delay_to_eagerness(delay_ms: int | None) -> str:
 
 
 def _build_client_events(conversation_config: AgentConversationConfig) -> list[str]:
-    events = ["audio"]
+    events = ["audio", "agent_response", "user_transcript"]
     if conversation_config.interruption_sensitivity != InterruptionSensitivity.low:
         events.append("interruption")
     return events

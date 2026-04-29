@@ -69,6 +69,8 @@ def test_build_elevenlabs_agent_payload_maps_turn_and_interruption_settings():
     }
     assert payload["conversation_config"]["conversation"]["client_events"] == [
         "audio",
+        "agent_response",
+        "user_transcript",
         "interruption",
     ]
     assert payload["conversation_config"]["agent"]["prompt"]["llm"] == "gemini-2.5-flash"
@@ -123,7 +125,7 @@ async def test_update_agent_persists_nested_configs_and_replaces_tools():
 
     update = AgentUpdate(
         name="Updated Agent",
-        system_prompt="Updated prompt",
+        system_prompt="Updated prompt that is long enough for validation and clearly instructs the agent.",
         first_message="Hello {{contact_name}}, I can help with your account today.",
         temperature=0.4,
         max_tokens=2048,
@@ -192,5 +194,9 @@ async def test_update_agent_persists_nested_configs_and_replaces_tools():
     _, payload = mock_client.update_agent.await_args.args
     assert payload["conversation_config"]["turn"]["silence_end_call_timeout"] == 20
     assert payload["conversation_config"]["turn"]["turn_eagerness"] == "patient"
-    assert payload["conversation_config"]["conversation"]["client_events"] == ["audio"]
+    assert payload["conversation_config"]["conversation"]["client_events"] == [
+        "audio",
+        "agent_response",
+        "user_transcript",
+    ]
     db.commit.assert_awaited()

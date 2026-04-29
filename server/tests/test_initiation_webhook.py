@@ -41,6 +41,7 @@ async def test_initiation_webhook_returns_dynamic_variables_and_updates_status()
     assert call.status == CallStatus.in_progress
     assert call.answered_at is not None
     assert contact.status == ContactStatus.calling
+    assert response["type"] == "conversation_initiation_client_data"
     assert response["dynamic_variables"]["contact_name"] == "Pat Lee"
     assert response["dynamic_variables"]["custom_interest_level"] == "High"
     db.commit.assert_awaited()
@@ -53,5 +54,6 @@ async def test_initiation_webhook_returns_empty_payload_when_call_not_found():
 
     response = await handle_initiation_webhook(db, {"conversation_id": "missing"})
 
-    assert response == {}
+    assert response["type"] == "conversation_initiation_client_data"
+    assert response["dynamic_variables"]["contact_name"] == "there"
     db.commit.assert_not_awaited()

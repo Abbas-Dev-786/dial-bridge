@@ -197,6 +197,28 @@ class ElevenLabsClient:
             params={"agent_id": agent_id},
         )
 
+    async def get_signed_url(self, agent_id: str) -> dict:
+        """
+        GET /convai/conversation/get-signed-url?agent_id={agent_id}
+        Returns: { "signed_url": str }
+        """
+        return await self._request(
+            "GET",
+            "/convai/conversation/get-signed-url",
+            params={"agent_id": agent_id},
+        )
+
+    async def list_conversations(self, agent_id: str) -> dict:
+        """
+        GET /convai/conversations?agent_id={agent_id}
+        Returns: { "conversations": [...], ... }
+        """
+        return await self._request(
+            "GET",
+            "/convai/conversations",
+            params={"agent_id": agent_id},
+        )
+
     async def get_conversation(self, conversation_id: str) -> dict:
         """
         GET /convai/conversations/{conversation_id}

@@ -16,6 +16,8 @@ const Dashboard = lazy(() => import("@/pages/Dashboard"));
 const Analytics = lazy(() => import("@/pages/Analytics"));
 const AgentsList = lazy(() => import("@/pages/AgentsList"));
 const AgentDetail = lazy(() => import("@/pages/AgentDetail"));
+const AgentConversation = lazy(() => import("@/pages/AgentConversation"));
+const AgentConversationHistory = lazy(() => import("@/pages/AgentConversationHistory"));
 const CampaignsList = lazy(() =>
   import("@/pages/CampaignsList").then((module) => ({ default: module.CampaignsList }))
 );
@@ -77,6 +79,8 @@ const App = () => (
                   <Route path="/analytics" element={<Analytics />} />
                   <Route path="/agents" element={<AgentsList />} />
                   <Route path="/agents/:id" element={<AgentDetail />} />
+                  <Route path="/agents/:id/chat" element={<AgentConversation />} />
+                  <Route path="/agents/:id/history" element={<AgentConversationHistory />} />
                   <Route path="/campaigns" element={<CampaignsList />} />
                   <Route path="/campaigns/:id" element={<CampaignDetail />} />
                   <Route path="/calls" element={<CallLogs />} />

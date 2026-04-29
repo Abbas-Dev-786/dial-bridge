@@ -46,6 +46,17 @@ export function useAgentTest(agentId?: string) {
     },
   });
 
+  const testAgentViaPhone = useMutation({
+    mutationFn: async (payload: { to_number: string; phone_number_id: string }) => {
+      if (!activeWorkspaceId || !agentId) throw new Error("Missing workspace or agent ID");
+      const { data } = await workspaceRequest.post<{ status: string; conversation_id?: string }>(
+        `/agents/${agentId}/test-call`,
+        payload
+      );
+      return data;
+    },
+  });
+
   const useTestConversation = (conversationId?: string) => {
     return useQuery({
       queryKey: ["agent-test-conversation", activeWorkspaceId, agentId, conversationId],
@@ -70,6 +81,7 @@ export function useAgentTest(agentId?: string) {
   return {
     startTestSession,
     startTestSignedUrlSession,
+    testAgentViaPhone,
     useTestConversation,
   };
 }

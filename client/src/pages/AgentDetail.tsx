@@ -28,6 +28,7 @@ import {
   AgentConfigCard,
   AgentActiveBanner,
 } from "@/components/agent-detail/AgentConfigCard";
+import { TestAgentPhoneDialog } from "@/components/agent-detail/TestAgentPhoneDialog";
 import { useAgentDetailQuery, useAgentMutations, useVoicesQuery } from "@/hooks/api/useAgents";
 
 
@@ -38,6 +39,7 @@ export default function AgentDetail() {
   const { toast } = useToast();
 
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [testPhoneOpen, setTestPhoneOpen] = useState(false);
   const [voiceOpen, setVoiceOpen] = useState(false);
   const [conversationOpen, setConversationOpen] = useState(false);
   const [toolsOpen, setToolsOpen] = useState(false);
@@ -262,7 +264,8 @@ export default function AgentDetail() {
         id={id || ""}
         name={agentData.name}
         status={agent.status}
-        onTest={() => navigate(`/agents/${id}/chat`)}
+        onTestBrowser={() => navigate(`/agents/${id}/chat`)}
+        onTestPhone={() => setTestPhoneOpen(true)}
         onDelete={() => setDeleteOpen(true)}
       />
 
@@ -428,6 +431,14 @@ export default function AgentDetail() {
         description={`Are you sure you want to delete ${agentData.name}? This will stop all active campaigns using this agent. This action cannot be undone.`}
         onConfirm={handleDelete}
       />
+
+      {id && (
+        <TestAgentPhoneDialog
+          open={testPhoneOpen}
+          onOpenChange={setTestPhoneOpen}
+          agentId={id}
+        />
+      )}
     </div>
   );
 }

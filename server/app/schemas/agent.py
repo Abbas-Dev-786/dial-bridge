@@ -145,3 +145,8 @@ class AgentListResponse(BaseModel):
     assigned_campaign_status: CampaignStatus | None = None
     created_at: datetime
     model_config = ConfigDict(from_attributes=True)
+
+class AgentTestCallRequest(BaseModel):
+    to_number: str = Field(..., description="The phone number to call")
+    phone_number_id: UUID = Field(..., description="The ID of the phone number to use as Caller ID")
+

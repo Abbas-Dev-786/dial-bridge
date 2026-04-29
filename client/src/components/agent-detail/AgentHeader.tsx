@@ -1,17 +1,24 @@
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, Bot, Phone, Trash2 } from "lucide-react";
+import { ChevronLeft, Bot, Phone, Trash2, Monitor, Smartphone, ChevronDown } from "lucide-react";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { useNavigate } from "react-router-dom";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 interface AgentHeaderProps {
   id: string;
   name: string;
   status: string;
-  onTest: () => void;
+  onTestBrowser: () => void;
+  onTestPhone: () => void;
   onDelete: () => void;
 }
 
-export function AgentHeader({ id, name, status, onTest, onDelete }: AgentHeaderProps) {
+export function AgentHeader({ id, name, status, onTestBrowser, onTestPhone, onDelete }: AgentHeaderProps) {
   const navigate = useNavigate();
   return (
     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -33,9 +40,23 @@ export function AgentHeader({ id, name, status, onTest, onDelete }: AgentHeaderP
         </div>
       </div>
       <div className="flex gap-2">
-        <Button variant="outline" onClick={onTest}>
-          <Phone className="mr-2 h-4 w-4" /> Test Agent
-        </Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline">
+              <Phone className="mr-2 h-4 w-4" /> Test Agent <ChevronDown className="ml-2 h-4 w-4 text-muted-foreground" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-[200px]">
+            <DropdownMenuItem onClick={onTestBrowser}>
+              <Monitor className="mr-2 h-4 w-4 text-muted-foreground" />
+              <span>In Browser</span>
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={onTestPhone}>
+              <Smartphone className="mr-2 h-4 w-4 text-muted-foreground" />
+              <span>By Phone Call</span>
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
         <Button variant="destructive" size="icon" onClick={onDelete} id="delete-agent-btn">
           <Trash2 className="h-4 w-4" />
         </Button>

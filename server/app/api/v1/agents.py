@@ -12,10 +12,12 @@ from app.schemas.agent import (
     AgentCreate, AgentUpdate, AgentResponse, AgentListResponse,
     VoiceConfigCreate, VoiceConfigResponse,
     ConversationConfigCreate, ConversationConfigResponse,
-    AgentToolCreate, AgentToolResponse
+    AgentToolCreate, AgentToolResponse, AgentTestCallRequest
 )
 from app.services import agent_service
 from app.services.elevenlabs_client import get_elevenlabs_client
+from app.models.phone_number import PhoneNumber
+from sqlalchemy import select, and_
 
 router = APIRouter()
 
@@ -361,3 +363,45 @@ async def get_test_conversation_audio(
                 "Content-Disposition": f"attachment; filename=conversation_{conversation_id}.mp3"
             }
         )
+
+@router.post("/{workspace_id}/agents/{agent_id}/test-call")
+async def test_agent_call(
+    workspace_id: UUID,
+    agent_id: UUID,
+    request: AgentTestCallRequest,
+    db: AsyncSession = Depends(get_db),
+    member: WorkspaceMember = Depends(get_workspace_member),
+):
+    """
+    Trigger a test outbound phone call from the agent to the given number.
+    """
+    from fastapi import HTTPException
+    
+    # 1. Verify agent exists
+    agent = await agent_service.get_agent(db, workspace_id, agent_id)
+
+    # 2. Verify and fetch the chosen caller ID phone number
+    stmt = select(PhoneNumber).where(
+        and_(
+            PhoneNumber.id == request.phone_number_id,
+            PhoneNumber.workspace_id == workspace_id
+        )
+    )
+    phone_number = (await db.execute(stmt)).scalar_one_or_none()
+    if not phone_number:
+        raise HTTPException(status_code=404, detail="Phone number not found in this workspace")
+
+    # 3. Call ElevenLabs
+    from app.services.elevenlabs_client import ElevenLabsClient
+    async with ElevenLabsClient() as client:
+        payload = {
+            "agent_id": agent.elevenlabs_agent_id,
+            "agent_phone_number_id": phone_number.elevenlabs_number_id,
+            "to_number": request.to_number
+        }
+        try:
+            response = await client.initiate_call(payload)
+            return {"status": "success", "conversation_id": response.get("conversation_id")}
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e))
+

@@ -22,7 +22,7 @@ import {
   useConversationDetailQuery,
 } from "@/hooks/api/useConversationHistory";
 import { cn, getErrorMessage } from "@/lib/utils";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { workspaceRequest } from "@/lib/api";
 
 function formatDate(unixSecs: number): string {
@@ -58,6 +58,37 @@ export default function AgentConversationHistory() {
   const [isLoadingAudio, setIsLoadingAudio] = useState(false);
   const [audioFetchError, setAudioFetchError] = useState<string | null>(null);
 
+  // Audio playback tracking for transcript highlighting
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [audioCurrentTime, setAudioCurrentTime] = useState<number>(0);
+  const [isPlaying, setIsPlaying] = useState(false);
+  
+  // Track the currently active message index for auto-scrolling
+  const activeMessageIndexRef = useRef<number>(-1);
+
+  // Auto-scroll logic
+  useEffect(() => {
+    if (!isPlaying || !conversationDetail?.transcript) return;
+
+    const transcript = conversationDetail.transcript;
+    const activeIndex = transcript.findIndex((msg: any, i: number) => {
+      const timeInCall = msg.time_in_call_secs || 0;
+      const nextMsg = transcript[i + 1];
+      const nextTimeInCall = nextMsg ? (nextMsg.time_in_call_secs || 0) : Infinity;
+      return audioCurrentTime >= timeInCall && audioCurrentTime < nextTimeInCall;
+    });
+
+    // Only scroll if the active message has changed to avoid interrupting manual scroll
+    if (activeIndex !== -1 && activeIndex !== activeMessageIndexRef.current) {
+      activeMessageIndexRef.current = activeIndex;
+      const el = document.getElementById(`transcript-msg-${activeIndex}`);
+      if (el) {
+        // Find the closest scrollable container (our ScrollArea viewport)
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+    }
+  }, [audioCurrentTime, isPlaying, conversationDetail?.transcript]);
+
   const fetchAudioRecording = useCallback(async () => {
     if (!conversationDetail?.audio_url) return;
     
@@ -86,6 +117,9 @@ export default function AgentConversationHistory() {
   useEffect(() => {
     setAudioBlobUrl(null);
     setAudioFetchError(null);
+    setAudioCurrentTime(0);
+    setIsPlaying(false);
+    activeMessageIndexRef.current = -1;
     if (conversationDetail?.audio_url) {
       fetchAudioRecording();
     }
@@ -251,40 +285,67 @@ export default function AgentConversationHistory() {
               {/* Transcript */}
               <ScrollArea className="flex-1 p-4" style={{ maxHeight: "calc(100vh - 20rem)" }}>
                 <div className="space-y-4">
-                  {(conversationDetail.transcript || []).map((msg: any, i: number) => (
-                    <div
-                      key={i}
-                      className={cn(
-                        "flex gap-3",
-                        msg.role === "user" ? "flex-row-reverse" : "flex-row"
-                      )}
-                    >
+                  {(conversationDetail.transcript || []).map((msg: any, i: number) => {
+                    // Determine if this message is currently being spoken
+                    const timeInCall = msg.time_in_call_secs || 0;
+                    const nextMsg = conversationDetail.transcript[i + 1];
+                    const nextTimeInCall = nextMsg ? (nextMsg.time_in_call_secs || 0) : Infinity;
+                    
+                    const isActive = isPlaying && audioCurrentTime >= timeInCall && audioCurrentTime < nextTimeInCall;
+
+                    return (
                       <div
+                        key={i}
+                        id={`transcript-msg-${i}`}
                         className={cn(
-                          "shrink-0 h-7 w-7 rounded-full flex items-center justify-center",
-                          msg.role === "agent"
-                            ? "bg-primary/10 text-primary"
-                            : "bg-muted text-muted-foreground"
+                          "flex gap-3 cursor-pointer group transition-all duration-300",
+                          msg.role === "user" ? "flex-row-reverse" : "flex-row",
+                          isActive ? "scale-[1.02]" : "hover:scale-[1.01]"
                         )}
+                        onClick={() => {
+                          if (audioRef.current && msg.time_in_call_secs !== undefined) {
+                            audioRef.current.currentTime = msg.time_in_call_secs;
+                            audioRef.current.play().catch(() => {});
+                          }
+                        }}
                       >
-                        {msg.role === "agent" ? (
-                          <Bot className="h-3.5 w-3.5" />
-                        ) : (
-                          <MessageSquare className="h-3.5 w-3.5" />
-                        )}
+                        <div
+                          className={cn(
+                            "shrink-0 h-7 w-7 rounded-full flex items-center justify-center transition-colors",
+                            msg.role === "agent"
+                              ? isActive ? "bg-primary text-primary-foreground shadow-md shadow-primary/20" : "bg-primary/10 text-primary group-hover:bg-primary/20"
+                              : isActive ? "bg-foreground text-background shadow-md" : "bg-muted text-muted-foreground group-hover:bg-muted-foreground/20"
+                          )}
+                        >
+                          {msg.role === "agent" ? (
+                            <Bot className="h-3.5 w-3.5" />
+                          ) : (
+                            <MessageSquare className="h-3.5 w-3.5" />
+                          )}
+                        </div>
+                        <div
+                          className={cn(
+                            "max-w-[80%] rounded-2xl px-3.5 py-2 text-sm transition-all duration-300",
+                            msg.role === "agent"
+                              ? isActive 
+                                ? "bg-primary/10 border border-primary/30 rounded-tl-md shadow-sm" 
+                                : "bg-muted/50 rounded-tl-md group-hover:bg-muted/80"
+                              : isActive
+                                ? "bg-primary text-primary-foreground border border-primary/50 rounded-tr-md shadow-sm"
+                                : "bg-primary text-primary-foreground rounded-tr-md opacity-90 group-hover:opacity-100"
+                          )}
+                        >
+                          <p className="leading-relaxed">{msg.message}</p>
+                          <span className={cn(
+                            "text-[9px] mt-1 block opacity-0 group-hover:opacity-100 transition-opacity",
+                            msg.role === "agent" ? "text-muted-foreground" : "text-primary-foreground/70 text-right"
+                          )}>
+                            {formatDuration(timeInCall)}
+                          </span>
+                        </div>
                       </div>
-                      <div
-                        className={cn(
-                          "max-w-[80%] rounded-2xl px-3.5 py-2 text-sm",
-                          msg.role === "agent"
-                            ? "bg-muted/50 rounded-tl-md"
-                            : "bg-primary text-primary-foreground rounded-tr-md"
-                        )}
-                      >
-                        <p className="leading-relaxed">{msg.message}</p>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </ScrollArea>
 
@@ -308,9 +369,14 @@ export default function AgentConversationHistory() {
                       </div>
                     ) : audioBlobUrl ? (
                       <audio
+                        ref={audioRef}
                         controls
                         className="h-8 w-64"
                         src={audioBlobUrl}
+                        onTimeUpdate={(e) => setAudioCurrentTime(e.currentTarget.currentTime)}
+                        onPlay={() => setIsPlaying(true)}
+                        onPause={() => setIsPlaying(false)}
+                        onEnded={() => setIsPlaying(false)}
                       />
                     ) : (
                       <div className="flex items-center gap-2">

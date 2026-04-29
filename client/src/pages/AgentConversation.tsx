@@ -1,14 +1,14 @@
 import { lazy, Suspense, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { Loader2, AlertCircle, Volume2, Zap, Clock, DollarSign } from "lucide-react";
+import { Loader2, AlertCircle, Volume2, Zap, Clock, DollarSign, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { useAgentDetailQuery } from "@/hooks/api/useAgents";
 import { useConversationSession } from "@/hooks/useConversationSession";
 import { ConversationHeader } from "@/components/conversation/ConversationHeader";
-import { ConversationTranscript } from "@/components/conversation/ConversationTranscript";
+import { MemoizedConversationTranscript } from "@/components/conversation/ConversationTranscript";
 import { ConversationControls } from "@/components/conversation/ConversationControls";
-import { AudioVisualizer } from "@/components/conversation/AudioVisualizer";
+import { MemoizedAudioVisualizer } from "@/components/conversation/AudioVisualizer";
 import { cn, getErrorMessage } from "@/lib/utils";
 
 const ConversationProvider = lazy(() =>
@@ -119,12 +119,8 @@ function AgentConversationInner() {
             : "h-16 bg-muted/30 border border-dashed opacity-60"
         )}
       >
-        <AudioVisualizer
-          getFrequencyData={
-            session.isSpeaking
-              ? session.getOutputFrequencyData
-              : session.getInputFrequencyData
-          }
+        <MemoizedAudioVisualizer
+          getFrequencyData={session.getFrequencyData}
           isActive={session.sessionStatus === "connected"}
           isSpeaking={session.isSpeaking}
           variant="bars"
@@ -133,7 +129,7 @@ function AgentConversationInner() {
       </div>
 
       {/* Transcript */}
-      <ConversationTranscript
+      <MemoizedConversationTranscript
         transcript={session.transcript}
         isSpeaking={session.isSpeaking}
         isConnected={session.sessionStatus === "connected"}
@@ -164,7 +160,7 @@ function AgentConversationInner() {
       )}
 
       {/* Recording Player — after conversation */}
-      {session.finalConversation?.audio_url && session.sessionStatus === "disconnected" && (
+      {session.sessionStatus === "disconnected" && session.finalConversation?.audio_url && (
         <div className="mx-4 mt-2 rounded-xl border bg-primary/5 p-3 flex items-center justify-between animate-in zoom-in duration-300">
           <div className="flex items-center gap-3">
             <div className="bg-primary/20 p-2 rounded-full">
@@ -175,11 +171,33 @@ function AgentConversationInner() {
               <p className="text-[10px] text-muted-foreground">Full conversation audio</p>
             </div>
           </div>
-          <audio
-            controls
-            className="h-8 w-44"
-            src={session.finalConversation.audio_url}
-          />
+          {session.isLoadingAudio ? (
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              Loading...
+            </div>
+          ) : session.audioBlobUrl ? (
+            <audio
+              controls
+              className="h-8 w-44"
+              src={session.audioBlobUrl}
+            />
+          ) : (
+            <div className="flex items-center gap-2">
+              <p className="text-xs text-muted-foreground">
+                {session.audioFetchError === "Processing" ? "Audio processing..." : "Audio unavailable"}
+              </p>
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                className="h-6 w-6 text-muted-foreground hover:text-primary"
+                onClick={session.fetchAudioRecording}
+                title="Retry fetching audio"
+              >
+                <RefreshCw className="h-3 w-3" />
+              </Button>
+            </div>
+          )}
         </div>
       )}
 

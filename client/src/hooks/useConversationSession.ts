@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useConversation } from "@elevenlabs/react";
 import { useAgentTest } from "@/hooks/api/useAgentTest";
+import { workspaceRequest } from "@/lib/api";
 
 export interface TranscriptMessage {
   id: string;
@@ -121,10 +122,16 @@ export function useConversationSession({
 
   const { status: sdkStatus, isSpeaking, isMuted, canSendFeedback } = conversation;
 
+  // Store conversation in a ref so callbacks are stable and never recreated.
+  // useConversation returns a new object on every render, which would invalidate
+  // all useCallback deps and cause the AudioVisualizer to restart its animation loop.
+  const conversationRef = useRef(conversation);
+  conversationRef.current = conversation;
+
   // Sync SDK status to get conversation ID on connect
   useEffect(() => {
     if (sdkStatus === "connected" && !conversationId) {
-      const id = conversation.getId();
+      const id = conversationRef.current.getId();
       if (id) setConversationId(id);
     }
   }, [sdkStatus, conversationId]);
@@ -168,11 +175,56 @@ export function useConversationSession({
     }
   }, [finalConversation, sessionStatus]);
 
+  // Fetch audio recording as authenticated blob URL
+  const [audioBlobUrl, setAudioBlobUrl] = useState<string | null>(null);
+  const [isLoadingAudio, setIsLoadingAudio] = useState(false);
+  const [audioFetchError, setAudioFetchError] = useState<string | null>(null);
+
+  const fetchAudioRecording = useCallback(async () => {
+    if (!finalConversation?.audio_url || audioBlobUrl) return;
+    
+    setIsLoadingAudio(true);
+    setAudioFetchError(null);
+    try {
+      const res = await workspaceRequest.get(
+        finalConversation.audio_url.replace(/^\/api\/v1\/workspaces\/[^/]+/, ""),
+        { responseType: "blob" }
+      );
+      const url = URL.createObjectURL(res.data as Blob);
+      setAudioBlobUrl(url);
+    } catch (err: any) {
+      console.error("Failed to fetch conversation audio:", err);
+      // If it's a 404, it means ElevenLabs hasn't processed it yet or it's unavailable
+      if (err.response?.status === 404) {
+        setAudioFetchError("Processing");
+      } else {
+        setAudioFetchError("Failed");
+      }
+    } finally {
+      setIsLoadingAudio(false);
+    }
+  }, [finalConversation?.audio_url, audioBlobUrl]);
+
+  useEffect(() => {
+    if (sessionStatus === "disconnected" && finalConversation?.audio_url && !audioBlobUrl && !audioFetchError && !isLoadingAudio) {
+      fetchAudioRecording();
+    }
+  }, [sessionStatus, finalConversation?.audio_url, audioBlobUrl, audioFetchError, isLoadingAudio, fetchAudioRecording]);
+
+  useEffect(() => {
+    // Cleanup blob URL on unmount or new session
+    return () => {
+      if (audioBlobUrl) {
+        URL.revokeObjectURL(audioBlobUrl);
+      }
+    };
+  }, [audioBlobUrl]);
+
   // Cleanup on unmount
   useEffect(() => {
     return () => {
       try {
-        conversation.endSession();
+        conversationRef.current.endSession();
       } catch {
         // ignore cleanup errors
       }
@@ -180,6 +232,8 @@ export function useConversationSession({
       if (connectionTimeoutRef.current) clearTimeout(connectionTimeoutRef.current);
     };
   }, []);
+
+  // ── Actions — all use conversationRef for stable references ──
 
   const startSession = useCallback(async () => {
     try {
@@ -190,30 +244,17 @@ export function useConversationSession({
       setTranscript([]);
       setElapsed(0);
       setConversationId(null);
-      setSessionStatus("connecting");
+      setAudioBlobUrl(null);
+      setSessionStatus("requesting");
       msgIdRef.current = 0;
-      if (connectionTimeoutRef.current) {
-        clearTimeout(connectionTimeoutRef.current);
-      }
-      connectionTimeoutRef.current = setTimeout(() => {
-        setSessionStatus((current) => {
-          if (current !== "connected") {
-            onError?.("Timed out while connecting to ElevenLabs agent.");
-            return "error";
-          }
-          return current;
-        });
-      }, 20000);
 
       const sessionData = await startTestSignedUrlSession.mutateAsync();
+      const signedUrl = sessionData.signed_url;
 
-      // Authenticated WebSocket mode: backend generates the short-lived
-      // ElevenLabs signed URL so we avoid LiveKit/WebRTC data-channel failures.
-      // Connection status is tracked
-      // via onConnect/onDisconnect callbacks above.
-      // startSession returns void in v1.0.3.
-      conversation.startSession({
-        signedUrl: sessionData.signed_url,
+      setSessionStatus("connecting");
+      
+      conversationRef.current.startSession({
+        signedUrl,
         connectionType: "websocket",
         dynamicVariables: {
           contact_name: "there",
@@ -227,57 +268,69 @@ export function useConversationSession({
       setSessionStatus("error");
       onError?.(error?.message || "Failed to start conversation session");
     }
-  }, [agentId, startTestSignedUrlSession, conversation, onError]);
+  }, [agentId, startTestSignedUrlSession, onError]);
 
   const endSession = useCallback(() => {
     try {
-      conversation.endSession();
+      conversationRef.current.endSession();
     } catch (error) {
       console.error("Failed to end session:", error);
     }
-  }, [conversation]);
+  }, []);
 
   const toggleMute = useCallback(() => {
-    conversation.setMuted(!isMuted);
-  }, [conversation, isMuted]);
+    conversationRef.current.setMuted(!conversationRef.current.isMuted);
+  }, []);
 
   const sendTextMessage = useCallback(
     (text: string) => {
-      if (!text.trim() || sessionStatus !== "connected") return;
-      conversation.sendUserMessage(text);
+      if (!text.trim()) return;
+      conversationRef.current.sendUserMessage(text);
     },
-    [conversation, sessionStatus],
+    [],
   );
 
   const sendActivity = useCallback(() => {
-    if (sessionStatus === "connected") {
-      conversation.sendUserActivity();
-    }
-  }, [conversation, sessionStatus]);
+    conversationRef.current.sendUserActivity();
+  }, []);
 
   const sendFeedback = useCallback(
     (like: boolean) => {
-      conversation.sendFeedback(like);
+      conversationRef.current.sendFeedback(like);
     },
-    [conversation],
+    [],
   );
 
-  // Audio frequency data for visualization — SYNCHRONOUS per SDK docs
+  // Audio frequency data — stable callbacks using ref, never recreated.
+  // This is critical: if these callbacks changed, the AudioVisualizer
+  // would restart its requestAnimationFrame loop and cause audio glitches.
   const getInputFrequencyData = useCallback((): Uint8Array | undefined => {
     try {
-      return conversation.getInputByteFrequencyData();
+      return conversationRef.current.getInputByteFrequencyData();
     } catch {
       return undefined;
     }
-  }, [conversation]);
+  }, []);
 
   const getOutputFrequencyData = useCallback((): Uint8Array | undefined => {
     try {
-      return conversation.getOutputByteFrequencyData();
+      return conversationRef.current.getOutputByteFrequencyData();
     } catch {
       return undefined;
     }
-  }, [conversation]);
+  }, []);
+
+  // Combined frequency getter — always stable, picks input or output internally
+  const getFrequencyData = useCallback((): Uint8Array | undefined => {
+    try {
+      const conv = conversationRef.current;
+      return conv.isSpeaking
+        ? conv.getOutputByteFrequencyData()
+        : conv.getInputByteFrequencyData();
+    } catch {
+      return undefined;
+    }
+  }, []);
 
   return {
     // State
@@ -292,6 +345,9 @@ export function useConversationSession({
     canSendFeedback,
     finalConversation,
     isLoadingFinal,
+    audioBlobUrl,
+    isLoadingAudio,
+    audioFetchError,
 
     // Actions
     startSession,
@@ -303,6 +359,8 @@ export function useConversationSession({
     sendFeedback,
     getInputFrequencyData,
     getOutputFrequencyData,
+    getFrequencyData,
+    fetchAudioRecording,
   };
 }
 

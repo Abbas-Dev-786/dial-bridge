@@ -343,8 +343,17 @@ async def get_test_conversation_audio(
     await agent_service.get_agent(db, workspace_id, agent_id)
 
     from app.services.elevenlabs_client import ElevenLabsClient
+    from app.exceptions import ElevenLabsError
+    from fastapi import HTTPException
+
     async with ElevenLabsClient() as client:
-        audio_content = await client.get_conversation_audio(conversation_id)
+        try:
+            audio_content = await client.get_conversation_audio(conversation_id)
+        except ElevenLabsError as e:
+            if "404" in str(e):
+                raise HTTPException(status_code=404, detail="Audio not available yet")
+            raise
+        
         return Response(
             content=audio_content,
             media_type="audio/mpeg",

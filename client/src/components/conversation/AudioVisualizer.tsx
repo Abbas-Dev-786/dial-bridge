@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback } from "react";
+import React, { useEffect, useRef, useCallback } from "react";
 import { cn } from "@/lib/utils";
 
 interface AudioVisualizerProps {
@@ -166,3 +166,5 @@ export function AudioVisualizer({
     />
   );
 }
+
+export const MemoizedAudioVisualizer = React.memo(AudioVisualizer);

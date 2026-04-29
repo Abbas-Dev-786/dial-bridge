@@ -13,6 +13,8 @@ import {
   CheckCircle2,
   XCircle,
   Play,
+  RefreshCw,
+  Volume2,
 } from "lucide-react";
 import { useAgentDetailQuery } from "@/hooks/api/useAgents";
 import {
@@ -20,7 +22,8 @@ import {
   useConversationDetailQuery,
 } from "@/hooks/api/useConversationHistory";
 import { cn, getErrorMessage } from "@/lib/utils";
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
+import { workspaceRequest } from "@/lib/api";
 
 function formatDate(unixSecs: number): string {
   const d = new Date(unixSecs * 1000);
@@ -49,6 +52,51 @@ export default function AgentConversationHistory() {
   const { data: conversationDetail, isLoading: isLoadingDetail } = useConversationDetailQuery(id, selectedConversationId || undefined);
 
   const conversations = historyData?.conversations || [];
+
+  // Fetch audio recording as authenticated blob URL
+  const [audioBlobUrl, setAudioBlobUrl] = useState<string | null>(null);
+  const [isLoadingAudio, setIsLoadingAudio] = useState(false);
+  const [audioFetchError, setAudioFetchError] = useState<string | null>(null);
+
+  const fetchAudioRecording = useCallback(async () => {
+    if (!conversationDetail?.audio_url) return;
+    
+    setIsLoadingAudio(true);
+    setAudioFetchError(null);
+    try {
+      const res = await workspaceRequest.get(
+        conversationDetail.audio_url.replace(/^\/api\/v1\/workspaces\/[^/]+/, ""),
+        { responseType: "blob" }
+      );
+      const url = URL.createObjectURL(res.data as Blob);
+      setAudioBlobUrl(url);
+    } catch (err: any) {
+      console.error("Failed to fetch conversation audio:", err);
+      if (err.response?.status === 404) {
+        setAudioFetchError("Processing");
+      } else {
+        setAudioFetchError("Failed");
+      }
+    } finally {
+      setIsLoadingAudio(false);
+    }
+  }, [conversationDetail?.audio_url]);
+
+  // Reset audio state when selecting a different conversation
+  useEffect(() => {
+    setAudioBlobUrl(null);
+    setAudioFetchError(null);
+    if (conversationDetail?.audio_url) {
+      fetchAudioRecording();
+    }
+    
+    return () => {
+      if (audioBlobUrl) {
+        URL.revokeObjectURL(audioBlobUrl);
+      }
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedConversationId, conversationDetail?.audio_url]);
 
   if (isLoadingAgent) {
     return (
@@ -242,12 +290,45 @@ export default function AgentConversationHistory() {
 
               {/* Audio player */}
               {conversationDetail.audio_url && (
-                <div className="p-4 border-t">
-                  <audio
-                    controls
-                    className="w-full h-8"
-                    src={conversationDetail.audio_url}
-                  />
+                <div className="p-4 border-t flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="bg-primary/10 p-2 rounded-full">
+                      <Volume2 className="h-4 w-4 text-primary" />
+                    </div>
+                    <div>
+                      <p className="text-xs font-medium">Recording</p>
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-center">
+                    {isLoadingAudio ? (
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground mr-4">
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        Loading...
+                      </div>
+                    ) : audioBlobUrl ? (
+                      <audio
+                        controls
+                        className="h-8 w-64"
+                        src={audioBlobUrl}
+                      />
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <p className="text-xs text-muted-foreground">
+                          {audioFetchError === "Processing" ? "Audio processing..." : "Audio unavailable"}
+                        </p>
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          className="h-6 w-6 text-muted-foreground hover:text-primary"
+                          onClick={fetchAudioRecording}
+                          title="Retry fetching audio"
+                        >
+                          <RefreshCw className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
             </div>

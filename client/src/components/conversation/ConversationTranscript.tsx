@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import React, { useEffect, useRef } from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import { Bot, User, ThumbsUp, ThumbsDown, Mic, ArrowDown } from "lucide-react";
@@ -215,3 +215,5 @@ export function ConversationTranscript({
     </div>
   );
 }
+
+export const MemoizedConversationTranscript = React.memo(ConversationTranscript);

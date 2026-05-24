@@ -27,6 +27,7 @@ import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 
 const TIMEZONES = [
+  "Asia/Kolkata",
   "UTC",
   "US/Eastern",
   "US/Central",
@@ -34,7 +35,6 @@ const TIMEZONES = [
   "US/Pacific",
   "Europe/London",
   "Asia/Dubai",
-  "Asia/Kolkata",
   "Australia/Sydney",
 ];
 
@@ -58,8 +58,8 @@ export function SettingsTab() {
     name: "",
     goal_description: "",
     caller_id_display_name: "",
-    timezone: "US/Eastern",
-    schedule_days: ["Mon", "Tue", "Wed", "Thu", "Fri"],
+    timezone: "Asia/Kolkata",
+    schedule_days: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
     schedule_start_time: "09:00",
     schedule_end_time: "17:00",
     start_date: null,
@@ -81,8 +81,8 @@ export function SettingsTab() {
         name: campaign.name || "",
         goal_description: campaign.goal_description || "",
         caller_id_display_name: campaign.caller_id_display_name || "",
-        timezone: campaign.timezone || "US/Eastern",
-        schedule_days: campaign.schedule_days || ["Mon", "Tue", "Wed", "Thu", "Fri"],
+        timezone: campaign.timezone || "Asia/Kolkata",
+        schedule_days: campaign.schedule_days || ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
         schedule_start_time: campaign.schedule_start_time || "09:00",
         schedule_end_time: campaign.schedule_end_time || "17:00",
         start_date: campaign.start_date || null,

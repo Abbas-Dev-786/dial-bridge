@@ -17,8 +17,8 @@ class CampaignCreate(BaseModel):
         max_length=500,
         description="Plain-English description of what this campaign should achieve.",
     )
-    timezone: str = "US/Eastern"
-    schedule_days: list[str] = ["Mon", "Tue", "Wed", "Thu", "Fri"]
+    timezone: str = "Asia/Kolkata"
+    schedule_days: list[str] = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
     schedule_start_time: str = "09:00"  # HH:MM
     schedule_end_time: str = "17:00"
     start_date: date | None = None

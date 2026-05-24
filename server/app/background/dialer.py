@@ -278,22 +278,34 @@ async def recover_orphaned_feeders():
 
 def _is_within_schedule(campaign: Campaign) -> bool:
     try:
-        tz = ZoneInfo(campaign.timezone or "US/Eastern")
+        tz = ZoneInfo(campaign.timezone or "Asia/Kolkata")
     except Exception:
-        tz = ZoneInfo("US/Eastern")
+        tz = ZoneInfo("Asia/Kolkata")
         
     now_in_tz = datetime.now(tz)
     day = now_in_tz.strftime("%a")
     curr_time = now_in_tz.time()
+
+    logger.info(
+        "Schedule check: campaign=%s tz=%s now=%s day=%s schedule_days=%s "
+        "start=%s end=%s",
+        campaign.id, campaign.timezone, now_in_tz.isoformat(), day,
+        campaign.schedule_days, campaign.schedule_start_time,
+        campaign.schedule_end_time,
+    )
     
     if campaign.schedule_days and day not in campaign.schedule_days:
+        logger.info("Schedule BLOCKED: day %s not in %s", day, campaign.schedule_days)
         return False
     if campaign.schedule_start_time and curr_time < campaign.schedule_start_time:
+        logger.info("Schedule BLOCKED: time %s before start %s", curr_time, campaign.schedule_start_time)
         return False
     if campaign.schedule_end_time and curr_time > campaign.schedule_end_time:
+        logger.info("Schedule BLOCKED: time %s after end %s", curr_time, campaign.schedule_end_time)
         return False
         
     return True
+
 
 async def _auto_complete_campaign(db, campaign: Campaign):
     """Transition campaign to completed status."""

@@ -49,9 +49,9 @@ class Campaign(AppBase):
     )
     kb_last_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     
-    timezone: Mapped[str] = mapped_column(String, default="US/Eastern")
+    timezone: Mapped[str] = mapped_column(String, default="Asia/Kolkata")
     schedule_days: Mapped[list[str]] = mapped_column(
-        ARRAY(String), default=["Mon", "Tue", "Wed", "Thu", "Fri"]
+        ARRAY(String), default=["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
     )
     schedule_start_time: Mapped[time] = mapped_column(Time, default=time(9, 0))
     schedule_end_time: Mapped[time] = mapped_column(Time, default=time(17, 0))

@@ -196,7 +196,7 @@ async def assign_phone_number(db: AsyncSession, campaign: Campaign, data: Campai
     # Re-fetch with all relations for the response builder
     return await get_campaign(db, campaign.workspace_id, campaign.id)
 
-async def transition_status(db: AsyncSession, campaign: Campaign, new_status: CampaignStatus, workspace: Workspace) -> Campaign:
+async def transition_status(db: AsyncSession, campaign: Campaign, new_status: CampaignStatus, workspace: Workspace | None = None) -> Campaign:
     current = campaign.status
     valid_transitions = {
         CampaignStatus.draft: [CampaignStatus.scheduled, CampaignStatus.live],
@@ -352,11 +352,7 @@ async def take_kb_snapshot(db: AsyncSession, campaign: Campaign, trigger: KBSnap
         for doc in docs
     ]
     
-    if not campaign.agent:
-        result = await db.execute(select(Agent).where(Agent.id == campaign.agent_id))
-        agent = result.scalar_one_or_none()
-    else:
-        agent = campaign.agent
+    agent = await db.get(Agent, campaign.agent_id) if campaign.agent_id else None
         
     elevenlabs_agent_id = agent.elevenlabs_agent_id if agent else None
     
